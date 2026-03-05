@@ -1,0 +1,20 @@
+import jwt
+from django.conf import settings
+
+class JWTUserMiddleware:
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        request.user_id   = None
+        request.user_role = None
+        request.is_authenticated = False
+        auth = request.headers.get('Authorization', '')
+        if auth.startswith('Bearer '):
+            try:
+                payload = jwt.decode(auth.split(' ')[1], settings.SECRET_KEY, algorithms=['HS256'])
+                request.user_id   = payload.get('user_id')
+                request.user_role = payload.get('role', 'user')
+                request.is_authenticated = True
+            except: pass
+        return self.get_response(request)

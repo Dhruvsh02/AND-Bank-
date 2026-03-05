@@ -1,0 +1,227 @@
+name: AND Bank — CI Pipeline
+
+on:
+  push:
+    branches: [main, develop, 'feature/**']
+  pull_request:
+    branches: [main, develop]
+
+env:
+  PYTHON_VERSION: '3.11'
+  NODE_VERSION: '20'
+
+jobs:
+  # ─────────────────────────────────────────────
+  # 1. Frontend — Lint + Test + Build
+  # ─────────────────────────────────────────────
+  frontend:
+    name: Frontend (React + Vite)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./frontend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Unit Tests (Vitest)
+        run: npm run test:coverage
+        env:
+          VITE_API_BASE_URL: http://localhost/api
+          VITE_WS_URL: ws://localhost/ws
+
+      - name: Upload coverage
+        uses: codecov/codecov-action@v4
+        with:
+          files: ./frontend/coverage/coverage-final.json
+          flags: frontend
+
+      - name: Build
+        run: npm run build
+        env:
+          VITE_API_BASE_URL: http://localhost/api
+          VITE_WS_URL: ws://localhost/ws
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-dist
+          path: frontend/dist
+          retention-days: 7
+
+  # ─────────────────────────────────────────────
+  # 2. Backend — per-service tests
+  # ─────────────────────────────────────────────
+  backend-auth:
+    name: Auth Service Tests
+    runs-on: ubuntu-latest
+
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: testroot
+          MYSQL_DATABASE: andbank_auth_test
+        ports: ['3306:3306']
+        options: >-
+          --health-cmd="mysqladmin ping"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+      redis:
+        image: redis:7-alpine
+        ports: ['6379:6379']
+
+    defaults:
+      run:
+        working-directory: ./backend/services/auth-service
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run tests with coverage
+        run: |
+          coverage run --source='.' manage.py test --verbosity=2
+          coverage xml -o coverage.xml
+        env:
+          DJANGO_SETTINGS_MODULE: auth_service.settings.development
+          DB_PASSWORD: testroot
+          DB_HOST: 127.0.0.1
+          DB_NAME: andbank_auth_test
+          REDIS_URL: redis://localhost:6379/0
+          EMAIL_HOST_PASSWORD: ''
+          TWILIO_ACCOUNT_SID: ''
+          TWILIO_AUTH_TOKEN: ''
+          TWILIO_PHONE_NUMBER: ''
+
+      - name: Upload coverage
+        uses: codecov/codecov-action@v4
+        with:
+          files: ./backend/services/auth-service/coverage.xml
+          flags: auth-service
+
+  backend-user:
+    name: User Service Tests
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: testroot
+          MYSQL_DATABASE: andbank_users_test
+        ports: ['3306:3306']
+        options: >-
+          --health-cmd="mysqladmin ping"
+          --health-interval=10s --health-timeout=5s --health-retries=5
+    defaults:
+      run:
+        working-directory: ./backend/services/user-service
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '${{ env.PYTHON_VERSION }}', cache: pip }
+      - run: pip install -r requirements.txt
+      - run: coverage run --source='.' manage.py test --verbosity=2
+        env:
+          DJANGO_SETTINGS_MODULE: user_service.settings.development
+          DB_PASSWORD: testroot
+          DB_HOST: 127.0.0.1
+          DB_NAME: andbank_users_test
+
+  backend-transaction:
+    name: Transaction Service Tests
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: testroot
+          MYSQL_DATABASE: andbank_txn_test
+        ports: ['3306:3306']
+        options: >-
+          --health-cmd="mysqladmin ping"
+          --health-interval=10s --health-timeout=5s --health-retries=5
+      redis:
+        image: redis:7-alpine
+        ports: ['6379:6379']
+    defaults:
+      run:
+        working-directory: ./backend/services/transaction-service
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '${{ env.PYTHON_VERSION }}', cache: pip }
+      - run: pip install -r requirements.txt
+      - run: coverage run --source='.' manage.py test --verbosity=2
+        env:
+          DJANGO_SETTINGS_MODULE: transaction_service.settings.development
+          DB_PASSWORD: testroot
+          DB_HOST: 127.0.0.1
+          DB_NAME: andbank_txn_test
+          REDIS_URL: redis://localhost:6379/0
+
+  # ─────────────────────────────────────────────
+  # 3. Docker Build Check
+  # ─────────────────────────────────────────────
+  docker-build:
+    name: Docker Build Check
+    runs-on: ubuntu-latest
+    needs: [frontend, backend-auth, backend-user, backend-transaction]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build all images (no push)
+        run: docker-compose build --parallel
+        env:
+          MYSQL_ROOT_PASSWORD: ci_test_password
+          DB_PASSWORD: ci_test_password
+
+  # ─────────────────────────────────────────────
+  # 4. Security Scan
+  # ─────────────────────────────────────────────
+  security:
+    name: Security Scan
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Python Safety Check (auth-service)
+        run: |
+          pip install safety
+          safety check -r backend/services/auth-service/requirements.txt
+
+      - name: npm audit (frontend)
+        run: npm audit --audit-level=high
+        working-directory: ./frontend
+        continue-on-error: true
+
+      - name: Bandit (Python security linter)
+        run: |
+          pip install bandit
+          bandit -r backend/services/ -ll --exclude backend/services/*/tests/
+        continue-on-error: true

@@ -1,0 +1,144 @@
+@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;500;600;700&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,300&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --navy-950: #060e1a;
+    --navy-900: #0A1628;
+    --navy-800: #112240;
+    --navy-700: #1e3a6e;
+    --gold-500: #C9A84C;
+    --gold-400: #E4C57A;
+  }
+
+  html { @apply scroll-smooth; }
+
+  body {
+    @apply bg-navy-950 text-white font-sans antialiased;
+    background-color: #06101F;
+  }
+
+  * { @apply box-border; }
+
+  /* Custom scrollbar */
+  ::-webkit-scrollbar { width: 4px; height: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { @apply bg-gold-500/20 rounded; }
+  ::-webkit-scrollbar-thumb:hover { @apply bg-gold-500/40; }
+}
+
+@layer components {
+  /* ── Buttons ── */
+  .btn-primary {
+    @apply bg-gradient-to-r from-gold-500 to-gold-600 text-navy-900
+           font-semibold px-6 py-3 rounded-xl shadow-gold
+           hover:shadow-gold-lg hover:-translate-y-0.5
+           active:translate-y-0 active:shadow-gold
+           transition-all duration-200 disabled:opacity-50
+           disabled:cursor-not-allowed disabled:transform-none;
+  }
+
+  .btn-secondary {
+    @apply border border-white/10 bg-white/5 text-gray-300
+           px-6 py-3 rounded-xl
+           hover:border-gold-500/40 hover:text-white hover:bg-white/10
+           transition-all duration-200;
+  }
+
+  .btn-danger {
+    @apply bg-red-500/10 border border-red-500/30 text-red-400
+           px-4 py-2 rounded-lg text-sm font-medium
+           hover:bg-red-500/20 hover:border-red-400
+           transition-all duration-200;
+  }
+
+  .btn-ghost {
+    @apply text-gray-400 px-4 py-2 rounded-lg text-sm
+           hover:bg-white/5 hover:text-white
+           transition-all duration-200;
+  }
+
+  /* ── Form Inputs ── */
+  .input {
+    @apply w-full bg-white/5 border border-white/10 rounded-xl
+           px-4 py-3.5 text-white placeholder-gray-500 text-sm
+           outline-none focus:border-gold-500/60 focus:ring-1
+           focus:ring-gold-500/30 transition-all duration-200;
+  }
+
+  .input-label {
+    @apply block text-xs font-semibold uppercase tracking-widest
+           text-gray-400 mb-2;
+  }
+
+  .input-error {
+    @apply text-red-400 text-xs mt-1.5;
+  }
+
+  /* ── Cards ── */
+  .card {
+    @apply bg-navy-800/80 border border-white/[0.06] rounded-2xl p-6;
+  }
+
+  .card-hover {
+    @apply card hover:border-gold-500/20 hover:bg-navy-800
+           transition-all duration-200 cursor-pointer;
+  }
+
+  /* ── Badges ── */
+  .badge-success { @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-500/15 text-emerald-400; }
+  .badge-danger  { @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-red-500/15 text-red-400; }
+  .badge-gold    { @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-gold-500/15 text-gold-400; }
+  .badge-gray    { @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-white/10 text-gray-400; }
+  .badge-blue    { @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-blue-500/15 text-blue-400; }
+
+  /* ── Sidebar Nav ── */
+  .nav-item {
+    @apply flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm
+           text-gray-400 font-medium cursor-pointer
+           hover:bg-white/5 hover:text-white
+           transition-all duration-200;
+  }
+  .nav-item.active {
+    @apply bg-gold-500/10 text-gold-400 border-l-2 border-gold-500
+           rounded-l-none;
+  }
+
+  /* ── Section Header ── */
+  .section-title { @apply text-base font-semibold text-white; }
+  .section-subtitle { @apply text-xs text-gray-400 mt-0.5; }
+
+  /* ── Table ── */
+  .table-header {
+    @apply text-[10px] font-bold uppercase tracking-widest
+           text-gray-400 px-4 py-3 text-left border-b border-white/[0.06];
+  }
+  .table-cell {
+    @apply px-4 py-3.5 text-sm text-white border-b border-white/[0.04];
+  }
+
+  /* ── OTP Input ── */
+  .otp-input {
+    @apply w-14 h-14 text-center text-xl font-bold
+           bg-white/5 border border-white/10 rounded-xl text-white
+           focus:border-gold-500/60 focus:ring-1 focus:ring-gold-500/30
+           outline-none transition-all duration-200;
+  }
+
+  /* ── Page Title ── */
+  .page-title { @apply font-display text-3xl font-semibold text-white; }
+  .page-subtitle { @apply text-sm text-gray-400 mt-1; }
+}
+
+@layer utilities {
+  .text-balance { text-wrap: balance; }
+  .gradient-text {
+    @apply bg-gradient-to-r from-gold-400 to-gold-600 bg-clip-text text-transparent;
+  }
+  .glass {
+    @apply bg-white/5 backdrop-blur-sm border border-white/10;
+  }
+}

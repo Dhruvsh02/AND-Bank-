@@ -1,0 +1,270 @@
+version: '3.9'
+
+services:
+
+  # ─────────────────────────────────────────────
+  # INFRASTRUCTURE
+  # ─────────────────────────────────────────────
+
+  mysql:
+    image: mysql:8.0
+    container_name: andbank-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: "ANDBank@Root2024!"
+      MYSQL_DATABASE: andbank_main
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./backend/infrastructure/mysql/init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - andbank-network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "--password=ANDBank@Root2024!"]
+      interval: 10s
+      timeout: 10s
+      retries: 20
+      start_period: 90s
+
+  redis:
+    image: redis:7-alpine
+    container_name: andbank-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - andbank-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # ─────────────────────────────────────────────
+  # API GATEWAY
+  # ─────────────────────────────────────────────
+
+  api-gateway:
+    build: ./backend/api-gateway
+    container_name: andbank-gateway
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    depends_on:
+      - auth-service
+      - user-service
+      - transaction-service
+    networks:
+      - andbank-network
+
+  # ─────────────────────────────────────────────
+  # MICROSERVICES
+  # ─────────────────────────────────────────────
+
+  auth-service:
+    build: ./backend/services/auth-service
+    container_name: andbank-auth
+    restart: unless-stopped
+    env_file: ./backend/services/auth-service/.env
+    ports:
+      - "8001:8001"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./backend/services/auth-service:/app
+    networks:
+      - andbank-network
+    command: python manage.py runserver 0.0.0.0:8001
+
+  user-service:
+    build: ./backend/services/user-service
+    container_name: andbank-user
+    restart: unless-stopped
+    env_file: ./backend/services/user-service/.env
+    ports:
+      - "8002:8002"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./backend/services/user-service:/app
+      - user_media:/app/media
+    networks:
+      - andbank-network
+    command: python manage.py runserver 0.0.0.0:8002
+
+  transaction-service:
+    build: ./backend/services/transaction-service
+    container_name: andbank-transaction
+    restart: unless-stopped
+    env_file: ./backend/services/transaction-service/.env
+    ports:
+      - "8003:8003"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./backend/services/transaction-service:/app
+    networks:
+      - andbank-network
+    command: python manage.py runserver 0.0.0.0:8003
+
+  loan-service:
+    build: ./backend/services/loan-service
+    container_name: andbank-loan
+    restart: unless-stopped
+    env_file: ./backend/services/loan-service/.env
+    ports:
+      - "8004:8004"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./backend/services/loan-service:/app
+    networks:
+      - andbank-network
+    command: python manage.py runserver 0.0.0.0:8004
+
+  card-service:
+    build: ./backend/services/card-service
+    container_name: andbank-card
+    restart: unless-stopped
+    env_file: ./backend/services/card-service/.env
+    ports:
+      - "8005:8005"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./backend/services/card-service:/app
+    networks:
+      - andbank-network
+    command: python manage.py runserver 0.0.0.0:8005
+
+  notification-service:
+    build: ./backend/services/notification-service
+    container_name: andbank-notification
+    restart: unless-stopped
+    env_file: ./backend/services/notification-service/.env
+    ports:
+      - "8006:8006"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./backend/services/notification-service:/app
+    networks:
+      - andbank-network
+    command: python manage.py runserver 0.0.0.0:8006
+
+  admin-service:
+    build: ./backend/services/admin-service
+    container_name: andbank-admin
+    restart: unless-stopped
+    env_file: ./backend/services/admin-service/.env
+    ports:
+      - "8007:8007"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./backend/services/admin-service:/app
+    networks:
+      - andbank-network
+    command: python manage.py runserver 0.0.0.0:8007
+
+  chat-service:
+    build: ./backend/services/chat-service
+    container_name: andbank-chat
+    restart: unless-stopped
+    env_file: ./backend/services/chat-service/.env
+    ports:
+      - "8008:8008"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./backend/services/chat-service:/app
+    networks:
+      - andbank-network
+    command: python manage.py runserver 0.0.0.0:8008
+
+  # ─────────────────────────────────────────────
+  # CELERY
+  # ─────────────────────────────────────────────
+
+  celery-worker:
+    build: ./backend/services/notification-service
+    container_name: andbank-celery
+    restart: unless-stopped
+    env_file: ./backend/services/notification-service/.env
+    command: celery -A notification_service.celery worker --loglevel=info
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./backend/services/notification-service:/app
+    networks:
+      - andbank-network
+
+  celery-beat:
+    build: ./backend/services/notification-service
+    container_name: andbank-celery-beat
+    restart: unless-stopped
+    env_file: ./backend/services/notification-service/.env
+    command: celery -A notification_service.celery beat --loglevel=info
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./backend/services/notification-service:/app
+    networks:
+      - andbank-network
+
+  # ─────────────────────────────────────────────
+  # FRONTEND
+  # ─────────────────────────────────────────────
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: andbank-frontend
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    networks:
+      - andbank-network
+
+volumes:
+  mysql_data:
+  redis_data:
+  user_media:
+
+networks:
+  andbank-network:
+    driver: bridge
