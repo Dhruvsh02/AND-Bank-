@@ -98,6 +98,7 @@ REST_FRAMEWORK = {
         'user': '100/min',
         'otp':  '5/min',
     },
+    'EXCEPTION_HANDLER': 'shared.exceptions.custom_exception_handler',
 }
 
 # ── JWT ───────────────────────────────────────────────────────────
