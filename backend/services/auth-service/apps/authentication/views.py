@@ -93,12 +93,15 @@ class LoginView(APIView):
         identifier = data['identifier']
         try:
             if '@' in identifier and not identifier.startswith('AND'):
-                # Check if UPI ID (@andbank) or email
-                if '@andbank' in identifier.lower():
+                # UPI IDs look like "name@andbank" (no .com)
+                # Emails look like "name@andbank.com" or "name@gmail.com"
+                is_upi = identifier.lower().endswith('@andbank')
+                if is_upi:
                     user = AccountService.get_user_by_account_number(identifier)
                 else:
                     user = User.objects.get(email=identifier)
             else:
+                # Account number like AND123456789012
                 user = AccountService.get_user_by_account_number(identifier)
         except User.DoesNotExist:
             return Response({'detail': 'Invalid credentials.'}, status=401)

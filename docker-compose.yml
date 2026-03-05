@@ -80,7 +80,7 @@ services:
         condition: service_healthy
     volumes:
       - ./backend/services/auth-service:/app
-      - ./backend/shard:/app/shared
+      - ./backend/shared:/app/shared
     networks:
       - andbank-network
     command: python manage.py runserver 0.0.0.0:8001
@@ -100,6 +100,7 @@ services:
     volumes:
       - ./backend/services/user-service:/app
       - user_media:/app/media
+      - ./backend/shared:/app/shared
     networks:
       - andbank-network
     command: python manage.py runserver 0.0.0.0:8002
@@ -118,6 +119,7 @@ services:
         condition: service_healthy
     volumes:
       - ./backend/services/transaction-service:/app
+      - ./backend/shared:/app/shared
     networks:
       - andbank-network
     command: python manage.py runserver 0.0.0.0:8003
@@ -136,6 +138,7 @@ services:
         condition: service_healthy
     volumes:
       - ./backend/services/loan-service:/app
+      - ./backend/shared:/app/shared
     networks:
       - andbank-network
     command: python manage.py runserver 0.0.0.0:8004
@@ -154,6 +157,7 @@ services:
         condition: service_healthy
     volumes:
       - ./backend/services/card-service:/app
+      - ./backend/shared:/app/shared
     networks:
       - andbank-network
     command: python manage.py runserver 0.0.0.0:8005
@@ -172,6 +176,7 @@ services:
         condition: service_healthy
     volumes:
       - ./backend/services/notification-service:/app
+      - ./backend/shared:/app/shared
     networks:
       - andbank-network
     command: python manage.py runserver 0.0.0.0:8006
@@ -190,6 +195,7 @@ services:
         condition: service_healthy
     volumes:
       - ./backend/services/admin-service:/app
+      - ./backend/shared:/app/shared
     networks:
       - andbank-network
     command: python manage.py runserver 0.0.0.0:8007
@@ -208,6 +214,7 @@ services:
         condition: service_healthy
     volumes:
       - ./backend/services/chat-service:/app
+      - ./backend/shared:/app/shared
     networks:
       - andbank-network
     command: python manage.py runserver 0.0.0.0:8008
@@ -229,6 +236,7 @@ services:
         condition: service_healthy
     volumes:
       - ./backend/services/notification-service:/app
+      - ./backend/shared:/app/shared
     networks:
       - andbank-network
 
@@ -245,6 +253,7 @@ services:
         condition: service_healthy
     volumes:
       - ./backend/services/notification-service:/app
+      - ./backend/shared:/app/shared
     networks:
       - andbank-network
 
