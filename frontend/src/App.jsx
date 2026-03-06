@@ -25,8 +25,8 @@ import Reports           from './pages/admin/Reports'
 
 const Private = ({ children, adminOnly = false }) => {
   const token = sessionStorage.getItem('access_token')
-  const user  = JSON.parse(sessionStorage.getItem('user') || '{}')
-  if (!token) return <Navigate to="/login" replace />
+  const user  = JSON.parse(sessionStorage.getItem('user') || 'null')
+  if (!token || !user) return <Navigate to="/login" replace />
   if (adminOnly && user.role !== 'admin') return <Navigate to="/dashboard" replace />
   return children
 }

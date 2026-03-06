@@ -1,10 +1,9 @@
-import { configureStore } from '@reduxjs/toolkit';
-import authReducer from './slices/authSlice';
-import accountReducer from './slices/accountSlice'; // ADD THIS
+import { configureStore } from '@reduxjs/toolkit'
+import accountReducer from './slices/accountSlice'
 
 export const store = configureStore({
   reducer: {
-    auth: authReducer,
-    account: accountReducer, // ADD THIS
+    account: accountReducer,
+    // auth is Zustand — don't add it here
   },
-});
+})

@@ -1,202 +1,231 @@
-import { useEffect, useState } from 'react';
-import { useDispatch, useSelector } from 'react-redux';
-import { fetchDashboard } from '../../store/slices/accountSlice';
-import { Eye, EyeOff, Copy, Check, RefreshCw, ArrowUpRight, ArrowDownLeft, Clock } from 'lucide-react';
+import { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
+import {
+  ArrowUpRight, ArrowDownLeft, ArrowLeftRight,
+  Eye, EyeOff, TrendingUp, Smartphone,
+  RefreshCw, Copy, Check
+} from 'lucide-react'
+import Sidebar from '../../components/layout/Sidebar'
+import api from '../../services/api'
+import { C, S, fmt } from '../../utils/styles'
+
+const StatCard = ({ label, value, sub, color, icon: Icon }) => (
+  <div style={{ ...S.card, display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+      <span style={{ fontSize: '0.7rem', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: C.muted }}>
+        {label}
+      </span>
+      <div style={{ width: '2.25rem', height: '2.25rem', borderRadius: '0.625rem', background: `rgba(${color},0.12)`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <Icon size={16} color={`rgb(${color})`} />
+      </div>
+    </div>
+    <div style={{ fontSize: '1.5rem', fontWeight: 700, color: 'white', lineHeight: 1 }}>{value}</div>
+    {sub && <div style={{ fontSize: '0.75rem', color: C.muted }}>{sub}</div>}
+  </div>
+)
+
+const TxnRow = ({ txn }) => {
+  const isCredit = txn.txn_type === 'credit'
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', padding: '0.875rem 0', borderBottom: `1px solid ${C.border}` }}>
+      <div style={{ width: '2.5rem', height: '2.5rem', borderRadius: '0.75rem', background: isCredit ? 'rgba(34,197,94,0.1)' : 'rgba(239,68,68,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+        {isCredit ? <ArrowDownLeft size={16} color="#22c55e" /> : <ArrowUpRight size={16} color="#ef4444" />}
+      </div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ color: 'white', fontWeight: 500, fontSize: '0.875rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+          {txn.remark || txn.mode?.toUpperCase() || 'Transaction'}
+        </div>
+        <div style={{ color: C.muted, fontSize: '0.75rem' }}>{fmt.datetime(txn.initiated_at)}</div>
+      </div>
+      <div style={{ textAlign: 'right', flexShrink: 0 }}>
+        <div style={{ color: isCredit ? '#22c55e' : '#ef4444', fontWeight: 700, fontSize: '0.9rem' }}>
+          {isCredit ? '+' : '-'}{fmt.currency(txn.amount)}
+        </div>
+        <div style={{ fontSize: '0.65rem', color: C.muted, textTransform: 'uppercase' }}>{txn.mode}</div>
+      </div>
+    </div>
+  )
+}
 
 export default function Dashboard() {
-  const dispatch = useDispatch();
-  const { dashboard, loading, error } = useSelector((state) => state.account);
-  const { user } = useSelector((state) => state.auth);
+  const [account,     setAccount]     = useState(null)
+  const [txns,        setTxns]        = useState([])
+  const [loading,     setLoading]     = useState(true)
+  const [hideBalance, setHideBalance] = useState(false)
+  const [copied,      setCopied]      = useState('')
+  const navigate = useNavigate()
 
-  const [balanceVisible, setBalanceVisible] = useState(true);
-  const [copied, setCopied] = useState('');
+  const user = JSON.parse(sessionStorage.getItem('user') || '{}')
 
   useEffect(() => {
-    dispatch(fetchDashboard());
-  }, [dispatch]);
+    if (!sessionStorage.getItem('access_token')) { navigate('/login'); return }
+    fetchData()
+  }, [])
 
-  const copyToClipboard = (text, field) => {
-    navigator.clipboard.writeText(text);
-    setCopied(field);
-    setTimeout(() => setCopied(''), 2000);
-  };
+  const fetchData = async () => {
+    setLoading(true)
+    try {
+      const [accRes, txnRes] = await Promise.all([
+        api.get('/api/accounts/balance/'),
+        api.get('/api/transactions/?limit=8'),
+      ])
+      setAccount(accRes.data)
+      setTxns(txnRes.data.results || txnRes.data || [])
+    } catch (e) {
+      if (e.response?.status === 401) navigate('/login')
+    } finally {
+      setLoading(false)
+    }
+  }
 
-  const getGreeting = () => {
-    const hour = new Date().getHours();
-    if (hour < 12) return 'Good morning';
-    if (hour < 17) return 'Good afternoon';
-    return 'Good evening';
-  };
+  const copy = (text, field) => {
+    navigator.clipboard.writeText(text)
+    setCopied(field)
+    setTimeout(() => setCopied(''), 2000)
+  }
 
-  const formatCurrency = (amount) =>
-    new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(amount || 0);
+  const hour = new Date().getHours()
+  const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening'
 
-  const formatDate = (dateStr) =>
-    new Date(dateStr).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+  const totalIn  = txns.filter(t => t.txn_type === 'credit').reduce((a, t) => a + parseFloat(t.amount || 0), 0)
+  const totalOut = txns.filter(t => t.txn_type === 'debit').reduce((a, t)  => a + parseFloat(t.amount || 0), 0)
 
   if (loading) return (
-    <div className="flex items-center justify-center h-screen bg-[#0d1117]">
-      <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-yellow-400"></div>
+    <div style={S.page}>
+      <Sidebar />
+      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ textAlign: 'center' }}>
+          <div style={{ width: '3rem', height: '3rem', border: `3px solid ${C.goldDim}`, borderTop: `3px solid ${C.gold}`, borderRadius: '50%', animation: 'spin 0.8s linear infinite', margin: '0 auto 1rem' }} />
+          <p style={{ color: C.muted }}>Loading your dashboard...</p>
+        </div>
+      </div>
+      <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
     </div>
-  );
-
-  const account = dashboard?.account;
+  )
 
   return (
-    <div className="min-h-screen bg-[#0d1117] text-white p-6">
-      {/* Header */}
-      <div className="flex justify-between items-start mb-8">
-        <div>
-          <h1 className="text-2xl font-semibold">
-            {getGreeting()}, {user?.first_name || user?.username} 👋
-          </h1>
-          <p className="text-gray-400 text-sm mt-1">Here's your financial overview</p>
-        </div>
-        <button
-          onClick={() => dispatch(fetchDashboard())}
-          className="flex items-center gap-2 px-4 py-2 bg-[#1a2235] rounded-lg hover:bg-[#243044] transition text-sm"
-        >
-          <RefreshCw size={14} /> Refresh
-        </button>
-      </div>
+    <div style={S.page}>
+      <Sidebar />
+      <main style={{ flex: 1, overflowY: 'auto', padding: '2rem' }}>
 
-      {error && (
-        <div className="bg-red-900/30 border border-red-500 text-red-400 px-4 py-3 rounded-lg mb-6 text-sm">
-          {typeof error === 'string' ? error : 'Failed to load account data. Please refresh.'}
-        </div>
-      )}
-
-      {/* Account Card */}
-      <div className="bg-gradient-to-br from-[#1a2a4a] to-[#0d1a35] rounded-2xl p-6 mb-6 border border-[#243044]">
-        <div className="flex justify-between items-start mb-6">
+        {/* Header */}
+        <div style={{ marginBottom: '2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
           <div>
-            <p className="text-xs text-gray-400 uppercase tracking-widest mb-1">
-              {account?.account_type?.toUpperCase() || 'SAVINGS'} ACCOUNT
-            </p>
-            <div className="flex items-center gap-2">
-              <span className="text-gray-300 font-mono text-sm">
-                {account?.account_number
-                  ? account.account_number.replace(/(\d{4})(\d{4})(\d{4})/, '$1 $2 $3')
-                  : '---- ---- ----'}
-              </span>
-              {account?.account_number && (
-                <button onClick={() => copyToClipboard(account.account_number, 'account')}>
-                  {copied === 'account' ? <Check size={14} className="text-green-400" /> : <Copy size={14} className="text-gray-500 hover:text-white" />}
-                </button>
-              )}
+            <h1 style={{ fontFamily: 'Georgia,serif', fontSize: '1.75rem', color: 'white', marginBottom: '0.25rem' }}>
+              {greeting}, {user.first_name || 'there'} 👋
+            </h1>
+            <p style={{ color: C.muted, fontSize: '0.875rem' }}>Here's your financial overview</p>
+          </div>
+          <button onClick={fetchData} style={{ ...S.btnGhost, display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.625rem 1rem' }}>
+            <RefreshCw size={14} /> Refresh
+          </button>
+        </div>
+
+        {/* Balance Hero Card */}
+        <div style={{ background: `linear-gradient(135deg, #0A1628 0%, #1a3a6b 50%, #0A1628 100%)`, border: `1px solid rgba(201,168,76,0.2)`, borderRadius: '1.25rem', padding: '2rem', marginBottom: '1.5rem', position: 'relative', overflow: 'hidden' }}>
+          <div style={{ position: 'absolute', top: 0, right: 0, width: '300px', height: '300px', background: `radial-gradient(circle, rgba(201,168,76,0.08) 0%, transparent 70%)`, pointerEvents: 'none' }} />
+
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1.5rem' }}>
+            <div>
+              <div style={{ fontSize: '0.7rem', fontWeight: 700, letterSpacing: '0.15em', textTransform: 'uppercase', color: C.gold, marginBottom: '0.5rem' }}>
+                {account?.account_type?.toUpperCase() || 'SAVINGS'} ACCOUNT
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <span style={{ color: C.muted, fontSize: '0.875rem', fontFamily: 'monospace', letterSpacing: '0.05em' }}>
+                  {account?.account_number || '— — —'}
+                </span>
+                {account?.account_number && (
+                  <button onClick={() => copy(account.account_number, 'acct')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.muted, padding: 0, display: 'flex' }}>
+                    {copied === 'acct' ? <Check size={13} color="#22c55e" /> : <Copy size={13} />}
+                  </button>
+                )}
+              </div>
             </div>
-          </div>
-          <span className={`text-xs px-2 py-1 rounded-full ${account?.status === 'active' ? 'bg-green-900/50 text-green-400' : 'bg-red-900/50 text-red-400'}`}>
-            {account?.status || 'Active'}
-          </span>
-        </div>
-
-        {/* Balance */}
-        <div className="mb-6">
-          <p className="text-xs text-gray-400 mb-1">Available Balance</p>
-          <div className="flex items-center gap-3">
-            <span className="text-3xl font-bold">
-              {balanceVisible ? formatCurrency(account?.balance) : '₹ ••••••'}
-            </span>
-            <button onClick={() => setBalanceVisible(!balanceVisible)}>
-              {balanceVisible ? <EyeOff size={18} className="text-gray-500" /> : <Eye size={18} className="text-gray-500" />}
-            </button>
-          </div>
-        </div>
-
-        {/* UPI + IFSC */}
-        <div className="grid grid-cols-2 gap-4 mb-6">
-          <div>
-            <p className="text-xs text-gray-400 mb-1">UPI ID</p>
-            <div className="flex items-center gap-2">
-              <span className="text-sm font-mono text-yellow-400">
-                {account?.upi_id || 'Not assigned'}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+              <span style={{ fontSize: '0.7rem', padding: '0.2rem 0.6rem', borderRadius: '999px', background: account?.status === 'active' ? 'rgba(34,197,94,0.15)' : 'rgba(239,68,68,0.15)', color: account?.status === 'active' ? '#22c55e' : '#ef4444', fontWeight: 600 }}>
+                {(account?.status || 'active').toUpperCase()}
               </span>
-              {account?.upi_id && (
-                <button onClick={() => copyToClipboard(account.upi_id, 'upi')}>
-                  {copied === 'upi' ? <Check size={14} className="text-green-400" /> : <Copy size={14} className="text-gray-500 hover:text-white" />}
-                </button>
-              )}
-            </div>
-          </div>
-          <div>
-            <p className="text-xs text-gray-400 mb-1">IFSC Code</p>
-            <div className="flex items-center gap-2">
-              <span className="text-sm font-mono">{account?.ifsc_code || 'ANDB0000001'}</span>
-              <button onClick={() => copyToClipboard(account?.ifsc_code || 'ANDB0000001', 'ifsc')}>
-                {copied === 'ifsc' ? <Check size={14} className="text-green-400" /> : <Copy size={14} className="text-gray-500 hover:text-white" />}
+              <button onClick={() => setHideBalance(h => !h)} style={{ background: 'rgba(255,255,255,0.05)', border: `1px solid rgba(255,255,255,0.1)`, borderRadius: '0.5rem', padding: '0.5rem', cursor: 'pointer', color: C.muted, display: 'flex' }}>
+                {hideBalance ? <Eye size={18} /> : <EyeOff size={18} />}
               </button>
             </div>
           </div>
-        </div>
 
-        {/* Action buttons */}
-        <div className="flex gap-3">
-          {['Send', 'Receive', 'History'].map((action) => (
-            <button
-              key={action}
-              className="flex-1 py-2 rounded-xl bg-[#243044] hover:bg-[#2d3d5a] transition text-sm font-medium"
-            >
-              {action}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Stats Grid */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        {[
-          { label: 'TOTAL IN', value: formatCurrency(dashboard?.total_in), sub: 'This month', icon: ArrowDownLeft, color: 'text-green-400', bg: 'bg-green-900/20' },
-          { label: 'TOTAL OUT', value: formatCurrency(dashboard?.total_out), sub: 'This month', icon: ArrowUpRight, color: 'text-red-400', bg: 'bg-red-900/20' },
-          { label: 'TRANSACTIONS', value: dashboard?.transaction_count ?? 0, sub: 'Recent', icon: Clock, color: 'text-blue-400', bg: 'bg-blue-900/20' },
-          { label: 'UPI PAYMENTS', value: dashboard?.upi_count ?? 0, sub: 'Recent', icon: Clock, color: 'text-yellow-400', bg: 'bg-yellow-900/20' },
-        ].map(({ label, value, sub, icon: Icon, color, bg }) => (
-          <div key={label} className="bg-[#1a2235] rounded-xl p-4 border border-[#243044]">
-            <div className="flex justify-between items-start mb-3">
-              <p className="text-xs text-gray-400 tracking-widest">{label}</p>
-              <span className={`${bg} ${color} p-1.5 rounded-lg`}><Icon size={14} /></span>
+          {/* Balance */}
+          <div style={{ marginBottom: '1.5rem' }}>
+            <div style={{ fontSize: '0.75rem', color: C.muted, marginBottom: '0.5rem' }}>Available Balance</div>
+            <div style={{ fontSize: '2.5rem', fontWeight: 700, color: 'white', lineHeight: 1, letterSpacing: '-0.02em' }}>
+              {hideBalance ? '₹ ••••••' : fmt.currency(account?.balance || 0)}
             </div>
-            <p className="text-xl font-bold">{value}</p>
-            <p className="text-xs text-gray-500 mt-1">{sub}</p>
           </div>
-        ))}
-      </div>
 
-      {/* Recent Transactions */}
-      <div className="bg-[#1a2235] rounded-2xl p-6 border border-[#243044]">
-        <div className="flex justify-between items-center mb-4">
-          <h2 className="font-semibold">Recent Transactions</h2>
-          <button className="text-yellow-400 text-sm hover:underline">View All →</button>
+          {/* UPI + IFSC + Actions */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+              {/* UPI ID */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'rgba(255,255,255,0.04)', border: `1px solid rgba(255,255,255,0.08)`, borderRadius: '0.625rem', padding: '0.4rem 0.75rem' }}>
+                <Smartphone size={13} color={C.gold} />
+                <span style={{ color: C.gold, fontSize: '0.8rem', fontFamily: 'monospace' }}>{account?.upi_id || 'No UPI ID'}</span>
+                {account?.upi_id && (
+                  <button onClick={() => copy(account.upi_id, 'upi')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.muted, padding: 0, display: 'flex' }}>
+                    {copied === 'upi' ? <Check size={13} color="#22c55e" /> : <Copy size={13} />}
+                  </button>
+                )}
+              </div>
+              {/* IFSC */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'rgba(255,255,255,0.04)', border: `1px solid rgba(255,255,255,0.08)`, borderRadius: '0.625rem', padding: '0.4rem 0.75rem' }}>
+                <span style={{ color: C.muted, fontSize: '0.7rem', fontWeight: 700, letterSpacing: '0.05em' }}>IFSC</span>
+                <span style={{ color: 'white', fontSize: '0.8rem', fontFamily: 'monospace' }}>{account?.ifsc_code || 'ANDB0001001'}</span>
+                <button onClick={() => copy(account?.ifsc_code || 'ANDB0001001', 'ifsc')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.muted, padding: 0, display: 'flex' }}>
+                  {copied === 'ifsc' ? <Check size={13} color="#22c55e" /> : <Copy size={13} />}
+                </button>
+              </div>
+            </div>
+
+            {/* Quick actions */}
+            <div style={{ display: 'flex', gap: '0.75rem' }}>
+              {[
+                { label: 'Send',    icon: ArrowUpRight,   to: '/transfer',  color: '#ef4444' },
+                { label: 'Receive', icon: ArrowDownLeft,  to: '/upi',       color: '#22c55e' },
+                { label: 'History', icon: ArrowLeftRight, to: '/statement', color: C.gold },
+              ].map(a => (
+                <button key={a.label} onClick={() => navigate(a.to)}
+                  style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.35rem', background: 'rgba(255,255,255,0.06)', border: `1px solid rgba(255,255,255,0.1)`, borderRadius: '0.75rem', padding: '0.625rem 1rem', cursor: 'pointer' }}>
+                  <a.icon size={18} color={a.color} />
+                  <span style={{ fontSize: '0.7rem', color: C.muted }}>{a.label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
 
-        {dashboard?.recent_transactions?.length > 0 ? (
-          <div className="space-y-3">
-            {dashboard.recent_transactions.map((txn) => (
-              <div key={txn.id} className="flex justify-between items-center py-3 border-b border-[#243044] last:border-0">
-                <div className="flex items-center gap-3">
-                  <div className={`w-9 h-9 rounded-full flex items-center justify-center ${txn.type === 'credit' ? 'bg-green-900/30' : 'bg-red-900/30'}`}>
-                    {txn.type === 'credit'
-                      ? <ArrowDownLeft size={16} className="text-green-400" />
-                      : <ArrowUpRight size={16} className="text-red-400" />}
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium">{txn.description || 'Transaction'}</p>
-                    <p className="text-xs text-gray-400">{formatDate(txn.created_at)}</p>
-                  </div>
-                </div>
-                <span className={`font-semibold text-sm ${txn.type === 'credit' ? 'text-green-400' : 'text-red-400'}`}>
-                  {txn.type === 'credit' ? '+' : '-'}{formatCurrency(txn.amount)}
-                </span>
+        {/* Stat Cards */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px,1fr))', gap: '1rem', marginBottom: '1.5rem' }}>
+          <StatCard label="Total In"     value={fmt.currency(totalIn)}           sub="This month" color="34,197,94"  icon={TrendingUp}     />
+          <StatCard label="Total Out"    value={fmt.currency(totalOut)}          sub="This month" color="239,68,68"  icon={ArrowUpRight}   />
+          <StatCard label="Transactions" value={txns.length}                     sub="Recent"     color="59,130,246" icon={ArrowLeftRight} />
+          <StatCard label="UPI Payments" value={txns.filter(t => t.mode === 'upi').length} sub="Recent" color="201,168,76" icon={Smartphone} />
+        </div>
+
+        {/* Recent Transactions */}
+        <div style={S.card}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+            <h2 style={{ fontFamily: 'Georgia,serif', fontSize: '1.1rem', color: 'white' }}>Recent Transactions</h2>
+            <button onClick={() => navigate('/statement')} style={{ fontSize: '0.8rem', color: C.gold, background: 'none', border: 'none', cursor: 'pointer' }}>
+              View All →
+            </button>
+          </div>
+          {txns.length === 0
+            ? <div style={{ textAlign: 'center', padding: '3rem 0', color: C.muted }}>
+                <ArrowLeftRight size={40} style={{ margin: '0 auto 1rem', opacity: 0.3, display: 'block' }} />
+                <p>No transactions yet</p>
               </div>
-            ))}
-          </div>
-        ) : (
-          <div className="text-center py-10 text-gray-500">
-            <p className="text-3xl mb-2">⇌</p>
-            <p>No transactions yet</p>
-          </div>
-        )}
-      </div>
+            : txns.map((t, i) => <TxnRow key={t.id || i} txn={t} />)
+          }
+        </div>
+
+      </main>
+      <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
     </div>
-  );
+  )
 }

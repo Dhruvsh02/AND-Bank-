@@ -13,10 +13,15 @@ def generate_upi_id(username):
 def generate_ifsc():
     branch_code = str(random.randint(100000, 999999))
     return f"ANDB0{branch_code}"
-
-class Account(models.Model):
-    ifsc_code = models.CharField(max_length=11, default=generate_ifsc)
-    branch = models.CharField(max_length=100, default='AND Bank Main Branch')
+BRANCH_IFSC_MAP = {
+    'Mumbai Main':    'ANDB0001001',
+    'Delhi Central':  'ANDB0001002',
+    'Bangalore Hub':  'ANDB0001003',
+    'Chennai South':  'ANDB0001004',
+    'Hyderabad East': 'ANDB0001005',
+    'Pune West':      'ANDB0001006',
+    'Kolkata North':  'ANDB0001007',
+}
 
 class Account(models.Model):
     ACCOUNT_TYPES = [
@@ -49,6 +54,8 @@ class Account(models.Model):
         if not self.upi_id:
             # Will be set from the signal/view using username
             self.upi_id = f"{self.account_number}@andbank"
+        if self.branch in BRANCH_IFSC_MAP:
+            self.ifsc_code = BRANCH_IFSC_MAP[self.branch]
         super().save(*args, **kwargs)
 
     def __str__(self):

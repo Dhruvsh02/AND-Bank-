@@ -99,7 +99,12 @@ class AccountCreateView(APIView):
             })
 
         # Create bank account
-        acct = BankAccount(user_id=user_id, account_type=account_type)
+        acct = BankAccount(
+            user_id=user_id,
+            account_type=account_type,
+            branch=DEFAULT_BRANCH,
+            ifsc_code=BRANCH_IFSC_MAP[DEFAULT_BRANCH],
+        )
         acct.save()  # triggers auto account_number generation
 
         # Set UPI ID
@@ -206,3 +211,48 @@ class AdminAllAccountsStatsView(APIView):
             'active':         BankAccount.objects.filter(status='active').count(),
             'total_deposits': str(BankAccount.objects.aggregate(t=Sum('balance'))['t'] or 0),
         })
+
+
+class ProfileView(APIView):
+    """GET/PUT /api/users/profile/ — get or update user profile"""
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        user_id = get_user_id(request)
+        if not user_id:
+            return Response({'detail': 'Unauthorized'}, status=401)
+        try:
+            profile = UserProfile.objects.get(user_id=user_id)
+            acct    = BankAccount.objects.filter(user_id=user_id, status='active').first()
+        except UserProfile.DoesNotExist:
+            return Response({'detail': 'Profile not found'}, status=404)
+
+        return Response({
+            'user_id':    str(profile.user_id),
+            'first_name': profile.first_name,
+            'last_name':  profile.last_name,
+            'email':      profile.email,
+            'phone':      profile.phone,
+            'photo_url':  profile.photo_url,
+            'account_number': acct.account_number if acct else None,
+            'upi_id':         acct.upi_id         if acct else None,
+            'ifsc_code':      acct.ifsc_code       if acct else None,
+            'balance':        str(acct.balance)    if acct else '0.00',
+            'account_type':   acct.account_type    if acct else None,
+            'account_status': acct.status          if acct else None,
+        })
+
+    def put(self, request):
+        user_id = get_user_id(request)
+        if not user_id:
+            return Response({'detail': 'Unauthorized'}, status=401)
+        try:
+            profile = UserProfile.objects.get(user_id=user_id)
+        except UserProfile.DoesNotExist:
+            return Response({'detail': 'Profile not found'}, status=404)
+
+        profile.email = request.data.get('email', profile.email)
+        profile.phone = request.data.get('phone', profile.phone)
+        profile.save(update_fields=['email', 'phone', 'updated_at'])
+
+        return Response({'message': 'Profile updated', 'email': profile.email, 'phone': profile.phone})

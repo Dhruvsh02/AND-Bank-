@@ -52,7 +52,7 @@ export const useAuthStore = create(
       name:    'andbank-auth',
       storage: createJSONStorage(() => sessionStorage), // sessionStorage for security
       partialize: (state) => ({
-        user:         state.user,
+        user:         state.user, 
         accessToken:  state.accessToken,
         refreshToken: state.refreshToken,
         isAuthenticated: state.isAuthenticated,

@@ -5,6 +5,19 @@ from django.db import models
 from django.utils import timezone
 
 
+BRANCH_IFSC_MAP = {
+    'Mumbai Main':    'ANDB0001001',
+    'Delhi Central':  'ANDB0001002',
+    'Bangalore Hub':  'ANDB0001003',
+    'Chennai South':  'ANDB0001004',
+    'Hyderabad East': 'ANDB0001005',
+    'Pune West':      'ANDB0001006',
+    'Kolkata North':  'ANDB0001007',
+}
+
+DEFAULT_BRANCH = 'Mumbai Main'
+
+
 def generate_account_number():
     """Generate unique 12-digit AND Bank account number: AND-XXXXXXXXXXXX"""
     digits = ''.join(random.choices(string.digits, k=12))
@@ -12,11 +25,16 @@ def generate_account_number():
 
 
 def generate_upi_id(first_name, last_name, account_number):
-    """Generate UPI ID: firstname.lastname@andbank"""
-    base = f'{first_name.lower()}.{last_name.lower()}'
-    # Ensure uniqueness by appending last 4 digits if needed
-    suffix = account_number[-4:]
-    return f'{base}{suffix}@andbank'
+    """Generate UPI ID: firstname.lastname<last4>@andbank — no .com"""
+    first = (first_name or '').lower().strip().replace(' ', '')
+    last  = (last_name  or '').lower().strip().replace(' ', '')
+    suffix = account_number[-4:] if account_number else '0000'
+    if first and last:
+        return f'{first}.{last}{suffix}@andbank'
+    elif first:
+        return f'{first}{suffix}@andbank'
+    else:
+        return f'{suffix}@andbank'
 
 
 class BankAccount(models.Model):
@@ -39,11 +57,12 @@ class BankAccount(models.Model):
     account_type   = models.CharField(max_length=20, choices=ACCOUNT_TYPE_CHOICES, default='savings')
     balance        = models.DecimalField(max_digits=15, decimal_places=2, default=0.00)
     upi_id         = models.CharField(max_length=100, unique=True, null=True, blank=True)
-    ifsc_code      = models.CharField(max_length=11, default='ANDB0000001')
+    branch         = models.CharField(max_length=100, default=DEFAULT_BRANCH)
+    ifsc_code      = models.CharField(max_length=11, default='ANDB0001001')
     branch_code    = models.CharField(max_length=10, default='ANDB001')
     status         = models.CharField(max_length=20, choices=STATUS_CHOICES, default='active')
     is_primary     = models.BooleanField(default=True)
-    interest_rate  = models.DecimalField(max_digits=5, decimal_places=2, default=3.50)  # % per annum
+    interest_rate  = models.DecimalField(max_digits=5, decimal_places=2, default=3.50)
     daily_txn_limit = models.DecimalField(max_digits=15, decimal_places=2, default=500000.00)
     created_at     = models.DateTimeField(default=timezone.now)
     updated_at     = models.DateTimeField(auto_now=True)

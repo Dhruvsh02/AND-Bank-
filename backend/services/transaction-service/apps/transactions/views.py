@@ -1,6 +1,7 @@
 import uuid, logging
 from decimal import Decimal
 from django.utils import timezone
+from django.db.models import Q
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny
@@ -28,8 +29,7 @@ class TransactionListView(APIView):
         from_dt  = request.query_params.get('from_date')
         to_dt    = request.query_params.get('to_date')
 
-        qs = Transaction.objects.filter(from_user_id=user_id) | Transaction.objects.filter(to_user_id=user_id)
-        qs = qs.order_by('-initiated_at')
+        qs = Transaction.objects.filter(Q(from_user_id=user_id) | Q(to_user_id=user_id)).order_by('-initiated_at')
         if mode     and mode != 'all':     qs = qs.filter(mode=mode)
         if txn_type and txn_type != 'all': qs = qs.filter(txn_type=txn_type)
         if from_dt: qs = qs.filter(initiated_at__date__gte=from_dt)
@@ -143,7 +143,7 @@ class StatsView(APIView):
         from django.db.models import Sum, Count
         from datetime import date
         first = date.today().replace(day=1)
-        qs = Transaction.objects.filter(from_user_id=user_id) | Transaction.objects.filter(to_user_id=user_id)
+        qs = Transaction.objects.filter(Q(from_user_id=user_id) | Q(to_user_id=user_id))
         monthly = qs.filter(initiated_at__date__gte=first)
         return Response({
             'total_in':     str(monthly.filter(to_user_id=user_id, status='completed').aggregate(s=Sum('amount'))['s'] or 0),
@@ -188,7 +188,7 @@ class AdminUserTransactionView(APIView):
     def get(self, request, user_id):
         if request.headers.get('X-Service-Token') != 'internal-service-secret':
             return Response({'detail': 'Forbidden'}, status=403)
-        qs = (Transaction.objects.filter(from_user_id=user_id) | Transaction.objects.filter(to_user_id=user_id)).order_by('-initiated_at')
+        qs = Transaction.objects.filter(Q(from_user_id=user_id) | Q(to_user_id=user_id)).order_by('-initiated_at')
         return Response({'results': [_serialize(t) for t in qs[:100]]})
 
 
