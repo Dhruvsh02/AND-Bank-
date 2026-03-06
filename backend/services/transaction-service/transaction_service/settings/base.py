@@ -55,7 +55,8 @@ REST_FRAMEWORK = {
     'DEFAULT_RENDERER_CLASSES': ['rest_framework.renderers.JSONRenderer'],
 }
 
-SIMPLE_JWT = {'AUTH_HEADER_TYPES': ('Bearer',)}
+SIMPLE_JWT = {'AUTH_HEADER_TYPES': ('Bearer',),
+              'SIGNING_KEY': config('JWT_SIGNING_KEY', default='andbank-shared-jwt-secret-key-2024-production'),}
 CORS_ALLOW_ALL_ORIGINS = True
 STATIC_URL = '/static/'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'

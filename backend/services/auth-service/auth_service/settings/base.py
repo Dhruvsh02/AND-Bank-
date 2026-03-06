@@ -105,6 +105,7 @@ REST_FRAMEWORK = {
 SIMPLE_JWT = {
     'ACCESS_TOKEN_LIFETIME':  timedelta(minutes=config('JWT_ACCESS_EXPIRE_MINUTES', default=30, cast=int)),
     'REFRESH_TOKEN_LIFETIME': timedelta(days=config('JWT_REFRESH_EXPIRE_DAYS',   default=7,  cast=int)),
+    'SIGNING_KEY': config('JWT_SIGNING_KEY', default='andbank-shared-jwt-secret-key-2024-production'),
     'ROTATE_REFRESH_TOKENS':  True,
     'BLACKLIST_AFTER_ROTATION': True,
     'AUTH_HEADER_TYPES': ('Bearer',),

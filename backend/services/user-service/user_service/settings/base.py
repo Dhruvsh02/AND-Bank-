@@ -56,6 +56,7 @@ REST_FRAMEWORK = {
 
 SIMPLE_JWT = {
     'AUTH_HEADER_TYPES': ('Bearer',),
+    'SIGNING_KEY': config('JWT_SIGNING_KEY', default='andbank-shared-jwt-secret-key-2024-production'),
 }
 
 CORS_ALLOW_ALL_ORIGINS = True
