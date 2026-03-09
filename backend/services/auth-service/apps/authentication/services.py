@@ -115,25 +115,25 @@ class OTPService:
 class AccountService:
     @staticmethod
     def create_account_async(user_id, account_type, kyc_data, first_name='', last_name='', email='', phone=''):
-        try:
-            from apps.authentication.tasks import create_bank_account_task
-            create_bank_account_task.delay(user_id, account_type, kyc_data, first_name, last_name, email, phone)
-        except Exception as e:
-            logger.warning(f'Celery unavailable, calling user-service directly: {e}')
-            AccountService._create_sync(user_id, account_type, kyc_data, first_name, last_name, email, phone)
+        # Always use direct sync call — Celery is unreliable for critical account creation
+        AccountService._create_sync(user_id, account_type, kyc_data, first_name, last_name, email, phone)
 
     @staticmethod
     def _create_sync(user_id, account_type, kyc_data, first_name, last_name, email, phone):
         try:
-            http_requests.post(
+            resp = http_requests.post(
                 f"{settings.USER_SERVICE_URL}/api/accounts/create/",
                 json={
                     'user_id': user_id, 'account_type': account_type, 'kyc_data': kyc_data,
                     'first_name': first_name, 'last_name': last_name, 'email': email, 'phone': phone,
                 },
                 headers={'X-Service-Token': 'internal-service-secret'},
-                timeout=5,
+                timeout=10,
             )
+            if resp.status_code not in (200, 201):
+                logger.error(f'Account creation failed: {resp.status_code} {resp.text}')
+            else:
+                logger.info(f'Account created successfully for user {user_id}')
         except Exception as e:
             logger.error(f'Sync account creation failed: {e}')
 

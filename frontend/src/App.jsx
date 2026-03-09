@@ -12,8 +12,10 @@ import Statement from './pages/user/Statement'
 import Transfer  from './pages/user/Transfer'
 import UPI       from './pages/user/UPI'
 import Loans     from './pages/user/Loans'
-import Profile   from './pages/user/Profile'
+import Profile        from './pages/user/Profile'
+import ChangePassword from './pages/user/ChangePassword'
 import Chat      from './pages/user/Chat'
+import Cards     from './pages/user/Cards'
 
 // Admin pages
 import AdminDashboard    from './pages/admin/AdminDashboard'
@@ -45,8 +47,10 @@ export default function App() {
       <Route path="/statement" element={<Private><Statement /></Private>} />
       <Route path="/transfer"  element={<Private><Transfer /></Private>} />
       <Route path="/upi"       element={<Private><UPI /></Private>} />
+      <Route path="/cards"     element={<Private><Cards /></Private>} />
       <Route path="/loans"     element={<Private><Loans /></Private>} />
-      <Route path="/profile"   element={<Private><Profile /></Private>} />
+      <Route path="/profile"          element={<Private><Profile /></Private>} />
+      <Route path="/change-password" element={<Private><ChangePassword /></Private>} />
       <Route path="/chat"      element={<Private><Chat /></Private>} />
 
       {/* Admin */}

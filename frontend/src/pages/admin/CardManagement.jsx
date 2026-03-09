@@ -1,110 +1,202 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { CreditCard, Plus, CheckCircle } from 'lucide-react'
+import { CreditCard, CheckCircle, XCircle, Clock, AlertCircle } from 'lucide-react'
 import AdminSidebar from '../../components/layout/AdminSidebar'
 import api from '../../services/api'
 import { C, S, fmt } from '../../utils/styles'
 
-export default function CardManagement() {
-  const [cards,   setCards]   = useState([])
-  const [loading, setLoading] = useState(true)
-  const [filter,  setFilter]  = useState('all')
-  const navigate = useNavigate()
+const SC = {
+  active:   { bg:'rgba(34,197,94,0.1)',   text:'#22c55e', border:'rgba(34,197,94,0.3)'   },
+  pending:  { bg:'rgba(245,158,11,0.1)',  text:'#f59e0b', border:'rgba(245,158,11,0.3)'  },
+  blocked:  { bg:'rgba(239,68,68,0.1)',   text:'#ef4444', border:'rgba(239,68,68,0.3)'   },
+  rejected: { bg:'rgba(107,114,128,0.1)', text:'#9ca3af', border:'rgba(107,114,128,0.3)' },
+  expired:  { bg:'rgba(107,114,128,0.1)', text:'#9ca3af', border:'rgba(107,114,128,0.3)' },
+}
+const Badge = ({status}) => { const s=SC[status]||SC.expired; return <span style={{padding:'0.2rem 0.6rem',borderRadius:'999px',fontSize:'0.65rem',fontWeight:700,background:s.bg,color:s.text,border:`1px solid ${s.border}`}}>{status.toUpperCase()}</span> }
 
-  useEffect(() => {
-    const user = JSON.parse(sessionStorage.getItem('user') || '{}')
-    if (!sessionStorage.getItem('access_token') || user.role !== 'admin') { navigate('/login'); return }
-    api.get('/api/admin/cards/')
-      .then(r => setCards(r.data.results || r.data || []))
-      .catch(() => {})
-      .finally(() => setLoading(false))
-  }, [])
+function ActionModal({card, onClose, onDone}) {
+  const [action,setAction]=useState('approve')
+  const [limit,setLimit]=useState('50000')
+  const [note,setNote]=useState('')
+  const [loading,setLoading]=useState(false)
+  const [error,setError]=useState('')
+  const LIMITS=[25000,50000,100000,150000,200000,300000]
 
-  const approve = async (id) => {
-    try {
-      await api.post(`/api/admin/cards/${id}/approve/`, {})
-      setCards(p => p.map(c => c.id===id ? {...c, status:'active'} : c))
-    } catch (e) { alert(e.response?.data?.detail || 'Failed') }
+  const submit=async()=>{
+    setLoading(true);setError('')
+    try{
+      const res=await api.post(`/api/cards/admin/${card.id}/action/`,{action,credit_limit:action==='approve'?parseInt(limit):0,admin_note:note})
+      onDone(res.data.card)
+    }catch(e){setError(e.response?.data?.detail||'Action failed')}
+    finally{setLoading(false)}
   }
 
-  const sc = s => ({active:'#22c55e',pending:'#f59e0b',blocked:'#ef4444',expired:'#6b7280'}[s]||C.muted)
-  const sb = s => ({active:'rgba(34,197,94,0.1)',pending:'rgba(245,158,11,0.1)',blocked:'rgba(239,68,68,0.1)',expired:'rgba(107,114,128,0.1)'}[s]||'rgba(107,114,128,0.1)')
-
-  const filtered = cards.filter(c => filter === 'all' || c.status === filter)
-
-  const pill = (val, label) => (
-    <button key={val} onClick={() => setFilter(val)} style={{padding:'0.35rem 0.875rem',borderRadius:'999px',fontSize:'0.75rem',fontWeight:600,border:'none',cursor:'pointer',
-      background:filter===val?C.gold:'rgba(255,255,255,0.06)',color:filter===val?C.navy:C.muted}}>
-      {label}
-    </button>
+  return(
+    <div onClick={onClose} style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.75)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:1000,padding:'1rem'}}>
+      <div onClick={e=>e.stopPropagation()} style={{background:'#0d1a35',border:'1px solid rgba(201,168,76,0.2)',borderRadius:'1.25rem',padding:'2rem',width:'100%',maxWidth:'480px'}}>
+        <h2 style={{fontFamily:'Georgia,serif',color:'white',fontSize:'1.2rem',marginBottom:'0.25rem'}}>Review Application</h2>
+        <p style={{color:C.muted,fontSize:'0.8rem',marginBottom:'1.5rem'}}>{card.holder_name} — Visa Credit Card Application</p>
+        <div style={{background:'rgba(255,255,255,0.03)',borderRadius:'0.75rem',padding:'1rem',marginBottom:'1.25rem'}}>
+          {[['Annual Income',card.annual_income?fmt.currency(card.annual_income):'—'],['Employment',card.employment_type||'—'],['Purpose',card.purpose||'—']].map(([l,v])=>(
+            <div key={l} style={{display:'flex',justifyContent:'space-between',padding:'0.4rem 0',borderBottom:`1px solid ${C.border}`}}>
+              <span style={{color:C.muted,fontSize:'0.8rem'}}>{l}</span>
+              <span style={{color:'white',fontSize:'0.8rem',fontWeight:500,maxWidth:'60%',textAlign:'right'}}>{v}</span>
+            </div>
+          ))}
+        </div>
+        {error&&<div style={{marginBottom:'1rem',padding:'0.75rem',background:'rgba(239,68,68,0.1)',border:'1px solid rgba(239,68,68,0.3)',borderRadius:'0.75rem',color:'#f87171',fontSize:'0.875rem'}}>{error}</div>}
+        <div style={{display:'flex',gap:'0.75rem',marginBottom:'1.25rem'}}>
+          {[['approve','✅ Approve','#22c55e'],['reject','❌ Reject','#ef4444']].map(([val,label,color])=>(
+            <button key={val} onClick={()=>setAction(val)} style={{flex:1,padding:'0.75rem',borderRadius:'0.75rem',border:`2px solid ${action===val?color:C.border}`,background:action===val?`${color}18`:'transparent',color:action===val?color:C.muted,cursor:'pointer',fontWeight:600,fontSize:'0.875rem'}}>{label}</button>
+          ))}
+        </div>
+        {action==='approve'&&(
+          <div style={{marginBottom:'1rem'}}>
+            <label style={S.label}>Credit Limit</label>
+            <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:'0.5rem',marginTop:'0.5rem'}}>
+              {LIMITS.map(l=>(
+                <button key={l} onClick={()=>setLimit(String(l))} style={{padding:'0.5rem',borderRadius:'0.5rem',border:`1px solid ${limit==l?C.gold:C.border}`,background:limit==l?C.goldDim:'transparent',color:limit==l?C.gold:C.muted,cursor:'pointer',fontSize:'0.75rem',fontWeight:600}}>₹{l/1000}K</button>
+              ))}
+            </div>
+          </div>
+        )}
+        <div style={{marginBottom:'1.5rem'}}>
+          <label style={S.label}>Admin Note</label>
+          <textarea value={note} onChange={e=>setNote(e.target.value)} rows={2} placeholder={action==='approve'?'Approval note...':'Reason for rejection...'} style={{...S.input,marginTop:'0.5rem',resize:'vertical',fontFamily:'inherit'}}/>
+        </div>
+        <div style={{display:'flex',gap:'0.75rem'}}>
+          <button onClick={onClose} style={{...S.btnGhost,flex:1}}>Cancel</button>
+          <button onClick={submit} disabled={loading} style={{flex:2,padding:'0.75rem',borderRadius:'0.75rem',border:'none',cursor:'pointer',fontWeight:700,fontSize:'0.875rem',background:action==='approve'?'linear-gradient(135deg,#22c55e,#16a34a)':'linear-gradient(135deg,#ef4444,#dc2626)',color:'white',opacity:loading?0.7:1}}>
+            {loading?'Processing...':action==='approve'?`Approve — ₹${parseInt(limit).toLocaleString('en-IN')} limit`:'Reject Application'}
+          </button>
+        </div>
+      </div>
+    </div>
   )
+}
 
-  return (
+export default function CardManagement() {
+  const [cards,setCards]=useState([])
+  const [loading,setLoading]=useState(true)
+  const [filter,setFilter]=useState('pending')
+  const [typeFilter,setTypeFilter]=useState('credit')
+  const [actionCard,setActionCard]=useState(null)
+  const navigate=useNavigate()
+
+  useEffect(()=>{
+    const user=JSON.parse(sessionStorage.getItem('user')||'{}')
+    if(!sessionStorage.getItem('access_token')||user.role!=='admin'){navigate('/login');return}
+    fetchCards()
+  },[filter,typeFilter])
+
+  const fetchCards=async()=>{
+    setLoading(true)
+    try{
+      const params=new URLSearchParams({status:filter})
+      if(typeFilter!=='all') params.append('card_type',typeFilter)
+      const res=await api.get(`/api/cards/admin/all/?${params}`)
+      setCards(res.data.results||[])
+    }catch{}finally{setLoading(false)}
+  }
+
+  const pending=cards.filter(c=>c.status==='pending').length
+
+  const pendingLabel = pending > 0 ? 'Pending (' + pending + ')' : 'Pending'
+
+  return(
     <div style={S.page}>
       <AdminSidebar/>
       <main style={{flex:1,overflowY:'auto',padding:'2rem'}}>
-        <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:'2rem',flexWrap:'wrap',gap:'1rem'}}>
-          <div>
-            <h1 style={{fontFamily:'Georgia,serif',fontSize:'1.75rem',color:'white'}}>Card Management</h1>
-            <p style={{color:C.muted,fontSize:'0.875rem'}}>Issue and manage debit/credit cards</p>
-          </div>
-          <button style={{...S.btn,display:'flex',alignItems:'center',gap:'0.5rem'}}>
-            <Plus size={16}/> Issue New Card
-          </button>
+        <div style={{marginBottom:'2rem'}}>
+          <h1 style={{fontFamily:'Georgia,serif',fontSize:'1.75rem',color:'white',marginBottom:'0.25rem'}}>Card Management</h1>
+          <p style={{color:C.muted,fontSize:'0.875rem'}}>Review credit card applications and manage all cards</p>
         </div>
 
-        <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(130px,1fr))',gap:'1rem',marginBottom:'1.5rem'}}>
+        {/* Stats */}
+        <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:'1rem',marginBottom:'1.5rem'}}>
           {[
-            {label:'Total',   value:cards.length,                                 color:C.gold},
-            {label:'Active',  value:cards.filter(c=>c.status==='active').length,  color:'#22c55e'},
-            {label:'Pending', value:cards.filter(c=>c.status==='pending').length, color:'#f59e0b'},
-            {label:'Blocked', value:cards.filter(c=>c.status==='blocked').length, color:'#ef4444'},
-          ].map(s=>(
-            <div key={s.label} style={S.card}>
-              <div style={{fontSize:'0.65rem',fontWeight:700,letterSpacing:'0.1em',textTransform:'uppercase',color:C.muted,marginBottom:'0.5rem'}}>{s.label}</div>
-              <div style={{fontSize:'1.75rem',fontWeight:700,color:s.color}}>{s.value}</div>
+            ['Pending Review', cards.filter(c=>c.status==='pending').length,  '#f59e0b', Clock],
+            ['Active',         cards.filter(c=>c.status==='active').length,   '#22c55e', CheckCircle],
+            ['Blocked',        cards.filter(c=>c.status==='blocked').length,  '#ef4444', XCircle],
+            ['Rejected',       cards.filter(c=>c.status==='rejected').length, '#9ca3af', AlertCircle],
+          ].map(([label,count,color,Icon])=>(
+            <div key={label} style={{...S.card,padding:'1rem'}}>
+              <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'0.5rem'}}>
+                <span style={{fontSize:'0.65rem',fontWeight:700,letterSpacing:'0.1em',textTransform:'uppercase',color:C.muted}}>{label}</span>
+                <Icon size={16} color={color}/>
+              </div>
+              <div style={{fontSize:'1.5rem',fontWeight:700,color:'white'}}>{count}</div>
             </div>
           ))}
         </div>
 
-        <div style={{...S.card,marginBottom:'1.5rem',display:'flex',gap:'0.5rem',flexWrap:'wrap'}}>
-          {[['all','All'],['active','Active'],['pending','Pending'],['blocked','Blocked']].map(([v,l])=>pill(v,l))}
+        {/* Filters */}
+        <div style={{display:'flex',gap:'0.75rem',flexWrap:'wrap',marginBottom:'1.25rem'}}>
+          <div style={{display:'flex',gap:'0.35rem',background:'rgba(255,255,255,0.04)',borderRadius:'0.625rem',padding:'0.3rem'}}>
+            {[
+              ['pending', pendingLabel],
+              ['active',  'Active'],
+              ['all',     'All'],
+              ['rejected','Rejected'],
+            ].map(([val,label])=>(
+              <button key={val} onClick={()=>setFilter(val)} style={{padding:'0.35rem 0.875rem',borderRadius:'0.375rem',fontSize:'0.75rem',fontWeight:600,border:'none',cursor:'pointer',background:filter===val?C.gold:'transparent',color:filter===val?C.navy:C.muted}}>{label}</button>
+            ))}
+          </div>
+          <div style={{display:'flex',gap:'0.35rem',background:'rgba(255,255,255,0.04)',borderRadius:'0.625rem',padding:'0.3rem'}}>
+            {[['all','All'],['debit','Debit'],['credit','Credit']].map(([val,label])=>(
+              <button key={val} onClick={()=>setTypeFilter(val)} style={{padding:'0.35rem 0.875rem',borderRadius:'0.375rem',fontSize:'0.75rem',fontWeight:600,border:'none',cursor:'pointer',background:typeFilter===val?C.gold:'transparent',color:typeFilter===val?C.navy:C.muted}}>{label}</button>
+            ))}
+          </div>
         </div>
 
-        {loading
-          ? <div style={{...S.card,textAlign:'center',padding:'3rem',color:C.muted}}>Loading cards...</div>
-          : filtered.length === 0
-            ? <div style={{...S.card,textAlign:'center',padding:'3rem',color:C.muted}}>
-                <CreditCard size={40} style={{margin:'0 auto 1rem',opacity:0.3,display:'block'}}/>
-                <p>No cards found</p>
-              </div>
-            : <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(280px,1fr))',gap:'1.25rem'}}>
-                {filtered.map((card,i)=>(
-                  <div key={card.id||i} style={{background:'linear-gradient(135deg,#0A1628,#1a3a6b)',border:'1px solid rgba(201,168,76,0.15)',borderRadius:'1rem',padding:'1.5rem',position:'relative',overflow:'hidden'}}>
-                    <div style={{position:'absolute',top:0,right:0,width:'120px',height:'120px',background:'radial-gradient(circle,rgba(201,168,76,0.06),transparent)',pointerEvents:'none'}}/>
-                    <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:'1.5rem'}}>
-                      <CreditCard size={28} color={C.gold}/>
-                      <span style={{fontSize:'0.7rem',fontWeight:700,padding:'0.2rem 0.6rem',borderRadius:'999px',background:sb(card.status),color:sc(card.status),textTransform:'capitalize'}}>{card.status}</span>
-                    </div>
-                    <div style={{fontFamily:'monospace',fontSize:'1rem',color:'white',letterSpacing:'0.12em',marginBottom:'1rem'}}>
-                      **** **** **** {card.card_number?.slice(-4)||'****'}
-                    </div>
-                    <div style={{display:'flex',justifyContent:'space-between',marginBottom:'0.75rem'}}>
-                      <div><div style={{fontSize:'0.6rem',color:C.muted,textTransform:'uppercase',letterSpacing:'0.1em'}}>Holder</div><div style={{color:'white',fontSize:'0.875rem',fontWeight:500}}>{card.holder_name||'—'}</div></div>
-                      <div><div style={{fontSize:'0.6rem',color:C.muted,textTransform:'uppercase',letterSpacing:'0.1em'}}>Expires</div><div style={{color:'white',fontSize:'0.875rem'}}>{card.expiry||'—'}</div></div>
-                      <div><div style={{fontSize:'0.6rem',color:C.muted,textTransform:'uppercase',letterSpacing:'0.1em'}}>Network</div><div style={{color:'white',fontSize:'0.875rem',textTransform:'uppercase'}}>{card.network||'—'}</div></div>
-                    </div>
-                    {card.status === 'pending' && (
-                      <button onClick={()=>approve(card.id)}
-                        style={{width:'100%',background:'rgba(34,197,94,0.1)',border:'1px solid rgba(34,197,94,0.2)',borderRadius:'0.625rem',padding:'0.5rem',cursor:'pointer',color:'#22c55e',fontSize:'0.8rem',fontWeight:600,display:'flex',alignItems:'center',justifyContent:'center',gap:'0.35rem'}}>
-                        <CheckCircle size={14}/> Approve & Activate
-                      </button>
-                    )}
-                  </div>
+        {/* Table */}
+        <div style={{...S.card,padding:0,overflow:'hidden'}}>
+          {loading?(
+            <div style={{padding:'4rem',textAlign:'center',color:C.muted}}>Loading...</div>
+          ):cards.length===0?(
+            <div style={{padding:'4rem',textAlign:'center'}}>
+              <CreditCard size={40} color={C.muted} style={{margin:'0 auto 1rem',display:'block',opacity:0.3}}/>
+              <p style={{color:C.muted}}>No cards for this filter</p>
+            </div>
+          ):(
+            <table style={{width:'100%',borderCollapse:'collapse'}}>
+              <thead>
+                <tr style={{borderBottom:`1px solid ${C.border}`}}>
+                  {['Card','Holder','Type','Status','Expiry','Income','Action'].map(h=>(
+                    <th key={h} style={{padding:'0.875rem 1rem',textAlign:'left',fontSize:'0.65rem',fontWeight:700,letterSpacing:'0.1em',textTransform:'uppercase',color:C.muted}}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {cards.map(card=>(
+                  <tr key={card.id} style={{borderBottom:`1px solid ${C.border}`}}>
+                    <td style={{padding:'1rem',color:'white',fontFamily:'monospace',fontSize:'0.85rem'}}>•••• {card.card_number_last4||card.card_number?.slice(-4)||'????'}</td>
+                    <td style={{padding:'1rem',color:C.muted,fontSize:'0.8rem'}}>{card.holder_name}</td>
+                    <td style={{padding:'1rem'}}>
+                      <span style={{padding:'0.2rem 0.6rem',borderRadius:'999px',fontSize:'0.7rem',fontWeight:600,background:card.card_type==='debit'?'rgba(59,130,246,0.1)':'rgba(139,92,246,0.1)',color:card.card_type==='debit'?'#3b82f6':'#8b5cf6',border:`1px solid ${card.card_type==='debit'?'rgba(59,130,246,0.3)':'rgba(139,92,246,0.3)'}`}}>{card.card_type?.toUpperCase()}</span>
+                    </td>
+                    <td style={{padding:'1rem'}}><Badge status={card.status}/></td>
+                    <td style={{padding:'1rem',color:C.muted,fontSize:'0.8rem',fontFamily:'monospace'}}>{card.expiry}</td>
+                    <td style={{padding:'1rem',color:C.muted,fontSize:'0.8rem'}}>{card.annual_income?fmt.currency(card.annual_income):'—'}</td>
+                    <td style={{padding:'1rem'}}>
+                      {card.status==='pending'&&card.card_type==='credit'?(
+                        <button onClick={()=>setActionCard(card)} style={{...S.btnSm,display:'inline-flex',alignItems:'center',gap:'0.35rem',padding:'0.4rem 0.875rem'}}>
+                          <Clock size={13}/> Review
+                        </button>
+                      ):(
+                        <span style={{color:C.muted,fontSize:'0.75rem'}}>
+                          {card.status==='active'&&card.card_type==='credit'?fmt.currency(card.credit_limit):'—'}
+                        </span>
+                      )}
+                    </td>
+                  </tr>
                 ))}
-              </div>
-        }
+              </tbody>
+            </table>
+          )}
+        </div>
       </main>
+      {actionCard&&<ActionModal card={actionCard} onClose={()=>setActionCard(null)} onDone={card=>{setCards(cs=>cs.map(c=>c.id===card.id?{...c,...card}:c));setActionCard(null)}}/>}
     </div>
   )
 }

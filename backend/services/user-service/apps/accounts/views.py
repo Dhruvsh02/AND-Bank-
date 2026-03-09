@@ -140,6 +140,19 @@ class AccountCreateView(APIView):
             except Exception as e:
                 logger.warning(f'KYC save failed: {e}')
 
+        # Auto-create debit card via card-service
+        try:
+            import requests as _req
+            _req.post(
+                'http://card-service:8005/api/cards/internal/create-debit/',
+                json={'user_id': str(user_id), 'account_id': str(acct.id),
+                      'holder_name': f'{first_name} {last_name}'.strip().upper()},
+                headers={'X-Service-Token': 'internal-service-secret'},
+                timeout=5,
+            )
+        except Exception as _e:
+            logger.warning(f'Debit card auto-create failed: {_e}')
+
         logger.info(f'Account created: {acct.account_number} for user {user_id}')
         return Response({
             'account_number': acct.account_number,
@@ -221,10 +234,23 @@ class ProfileView(APIView):
         user_id = get_user_id(request)
         if not user_id:
             return Response({'detail': 'Unauthorized'}, status=401)
-        try:
-            profile = UserProfile.objects.get(user_id=user_id)
-            acct    = BankAccount.objects.filter(user_id=user_id, status='active').first()
-        except UserProfile.DoesNotExist:
+
+        acct    = BankAccount.objects.filter(user_id=user_id, status='active').first()
+        profile = UserProfile.objects.filter(user_id=user_id).first()
+
+        if not profile and acct:
+            first_name, last_name = '', ''
+            if acct.upi_id:
+                name_part  = acct.upi_id.split('@')[0]
+                parts      = name_part.split('.')
+                first_name = parts[0].capitalize()
+                last_name  = ''.join(c for c in parts[1] if c.isalpha()).capitalize() if len(parts) > 1 else ''
+            profile, _ = UserProfile.objects.get_or_create(
+                user_id=user_id,
+                defaults={'first_name': first_name, 'last_name': last_name, 'email': '', 'phone': ''}
+            )
+
+        if not profile:
             return Response({'detail': 'Profile not found'}, status=404)
 
         return Response({

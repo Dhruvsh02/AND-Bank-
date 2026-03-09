@@ -31,16 +31,11 @@ export default function Profile() {
     finally { setSaving(false) }
   }
 
-  const changePassword = async () => {
-    if (pwData.new_password !== pwData.confirm_password) { showMsg('error', 'Passwords do not match'); return }
-    if (pwData.new_password.length < 8) { showMsg('error', 'Password must be at least 8 characters'); return }
-    setSaving(true)
-    try {
-      await api.post('/api/auth/change-password/', pwData)
-      setPwData({ current_password:'', new_password:'', confirm_password:'' })
-      showMsg('success', 'Password changed successfully!')
-    } catch (e) { showMsg('error', e.response?.data?.detail || 'Failed to change password') }
-    finally { setSaving(false) }
+  const goToChangePassword = () => {
+    // Generate a short-lived token (timestamp-based, valid 60 seconds)
+    const ts    = Math.floor(Date.now() / 1000)
+    const token = btoa(String(ts) + '-' + (sessionStorage.getItem('user') || 'user')).slice(0, 32)
+    navigate(`/change-password?token=${token}&ts=${ts}`)
   }
 
   const uploadPhoto = async (file) => {
@@ -151,24 +146,15 @@ export default function Profile() {
 
         {/* Change Password */}
         <div style={S.card}>
-          <h2 style={{fontFamily:'Georgia,serif', fontSize:'1.1rem', color:'white', marginBottom:'1.25rem', display:'flex', alignItems:'center', gap:'0.5rem'}}>
+          <h2 style={{fontFamily:'Georgia,serif', fontSize:'1.1rem', color:'white', marginBottom:'0.75rem', display:'flex', alignItems:'center', gap:'0.5rem'}}>
             <Key size={18} color={C.gold} /> Change Password
           </h2>
-          <div style={{display:'flex', flexDirection:'column', gap:'1rem', marginBottom:'1rem'}}>
-            {[
-              {k:'current_password', label:'Current Password'},
-              {k:'new_password',     label:'New Password'},
-              {k:'confirm_password', label:'Confirm New Password'},
-            ].map(({k,label}) => (
-              <div key={k}>
-                <label style={S.label}>{label}</label>
-                <input type="password" value={pwData[k]} onChange={e => setPwData(p=>({...p,[k]:e.target.value}))} style={inputStyle} placeholder="••••••••" />
-              </div>
-            ))}
-          </div>
-          <button onClick={changePassword} disabled={saving}
-            style={{...S.btn, display:'flex', alignItems:'center', gap:'0.5rem', opacity:saving?0.7:1}}>
-            <Key size={16} /> {saving ? 'Updating...' : 'Update Password'}
+          <p style={{color:C.muted, fontSize:'0.875rem', marginBottom:'1.25rem'}}>
+            For your security, you'll be redirected to a secure page that expires in 60 seconds.
+          </p>
+          <button onClick={goToChangePassword}
+            style={{...S.btn, display:'flex', alignItems:'center', gap:'0.5rem'}}>
+            <Key size={16} /> Change Password Securely
           </button>
         </div>
       </main>

@@ -8,9 +8,11 @@ from .models import LoanApplication
 RATES = {'personal':10.5,'home':8.5,'car':9.0,'education':7.5}
 
 class LoanListView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [AllowAny]
 
     def get(self, request):
+        if not getattr(request, 'user_id', None):
+            return Response({'detail': 'Unauthorized'}, status=401)
         loans = LoanApplication.objects.filter(user_id=request.user_id)
         data  = [{
             'id':           str(l.id),
@@ -26,9 +28,11 @@ class LoanListView(APIView):
 
 
 class LoanApplyView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [AllowAny]
 
     def post(self, request):
+        if not getattr(request, 'user_id', None):
+            return Response({'detail': 'Unauthorized'}, status=401)
         loan_type = request.data.get('loan_type', 'personal')
         amount    = Decimal(str(request.data.get('amount', 0)))
         tenure    = int(request.data.get('tenure_months', 12))

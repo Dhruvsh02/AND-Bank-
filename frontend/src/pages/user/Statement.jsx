@@ -48,7 +48,7 @@ export default function Statement() {
   const totalOut = filtered.filter(t=>t.txn_type==='debit').reduce((a,t)=>a+parseFloat(t.amount||0),0)
 
   const pill = (val, cur, set, label) => (
-    <button onClick={() => set(val)}
+    <button key={val} onClick={() => set(val)}
       style={{padding:'0.375rem 0.875rem', borderRadius:'999px', fontSize:'0.75rem', fontWeight:600, border:'none', cursor:'pointer',
         background: cur===val ? C.gold : 'rgba(255,255,255,0.06)',
         color:       cur===val ? C.navy : C.muted}}>

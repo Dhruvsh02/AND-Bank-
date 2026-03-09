@@ -57,3 +57,8 @@ SIMPLE_JWT = {'AUTH_HEADER_TYPES': ('Bearer',),
               'SIGNING_KEY': config('JWT_SIGNING_KEY', default='andbank-shared-jwt-secret-key-2024-production'),}
 STATIC_URL = '/static/'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+# Razorpay
+RAZORPAY_KEY_ID      = config('RAZORPAY_KEY_ID',      default='rzp_test_placeholder')
+RAZORPAY_KEY_SECRET  = config('RAZORPAY_KEY_SECRET',  default='placeholder_secret')
+RAZORPAY_WEBHOOK_SECRET = config('RAZORPAY_WEBHOOK_SECRET', default='placeholder_webhook_secret')

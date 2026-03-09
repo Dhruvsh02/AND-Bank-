@@ -11,6 +11,7 @@ const NAV = [
   { to:'/statement',  icon:CreditCard,      label:'Statement' },
   { to:'/loans',      icon:PiggyBank,       label:'Loans' },
   { to:'/upi',        icon:Smartphone,      label:'UPI' },
+  { to:'/cards',      icon:CreditCard,      label:'Cards' },
   { to:'/profile',    icon:User,            label:'Profile' },
   { to:'/chat',       icon:MessageCircle,   label:'Chat Assistant' },
 ]

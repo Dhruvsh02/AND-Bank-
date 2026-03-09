@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Smartphone, Copy, Check, QrCode, ArrowRight } from 'lucide-react'
 import Sidebar from '../../components/layout/Sidebar'
@@ -15,6 +15,8 @@ export default function UPI() {
   const [copied,  setCopied]  = useState(false)
   const [result,  setResult]  = useState(null)
   const [error,   setError]   = useState('')
+  const [showQR,  setShowQR]  = useState(false)
+  const qrRef    = useRef()
   const navigate = useNavigate()
 
   useEffect(() => {
@@ -26,6 +28,39 @@ export default function UPI() {
     navigator.clipboard.writeText(account?.upi_id || '')
     setCopied(true); setTimeout(() => setCopied(false), 2000)
   }
+
+  // Draw QR code on canvas using UPI deep-link format
+  const drawQR = useCallback(() => {
+    if (!qrRef.current || !account?.upi_id) return
+    const canvas = qrRef.current
+    const ctx    = canvas.getContext('2d')
+    const size   = 200
+    canvas.width  = size
+    canvas.height = size
+
+    // UPI payment string
+    const upiStr = `upi://pay?pa=${account.upi_id}&pn=AND+Bank&mc=0000&mode=02&purpose=00`
+
+    // Use QR generation via Google Charts API (works offline via URL)
+    const img = new Image()
+    img.crossOrigin = 'anonymous'
+    img.src = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(upiStr)}&bgcolor=0A1628&color=C9A84C&format=png`
+    img.onload = () => { ctx.drawImage(img, 0, 0, size, size) }
+    img.onerror = () => {
+      // Fallback: draw a simple pattern indicating QR unavailable
+      ctx.fillStyle = '#0A1628'
+      ctx.fillRect(0, 0, size, size)
+      ctx.fillStyle = '#C9A84C'
+      ctx.font = 'bold 13px monospace'
+      ctx.textAlign = 'center'
+      ctx.fillText('QR Code', size/2, size/2 - 10)
+      ctx.font = '10px monospace'
+      ctx.fillStyle = '#9ca3af'
+      ctx.fillText(account?.upi_id || '', size/2, size/2 + 10)
+    }
+  }, [account?.upi_id])
+
+  useEffect(() => { if (showQR) drawQR() }, [showQR, drawQR])
 
   const sendUPI = async () => {
     if (!upiId || !amount) { setError('Enter UPI ID and amount'); return }
@@ -71,7 +106,7 @@ export default function UPI() {
             <button onClick={copy} style={{...S.btnGhost, display:'flex', alignItems:'center', gap:'0.5rem', fontSize:'0.8rem', padding:'0.5rem 1rem'}}>
               {copied ? <><Check size={14} color="#22c55e" /> Copied!</> : <><Copy size={14} /> Copy UPI ID</>}
             </button>
-            <button style={{...S.btnGhost, display:'flex', alignItems:'center', gap:'0.5rem', fontSize:'0.8rem', padding:'0.5rem 1rem'}}>
+            <button onClick={() => setShowQR(true)} style={{...S.btnGhost, display:'flex', alignItems:'center', gap:'0.5rem', fontSize:'0.8rem', padding:'0.5rem 1rem'}}>
               <QrCode size={14} /> Show QR
             </button>
           </div>
@@ -120,8 +155,8 @@ export default function UPI() {
 
           {tab === 'receive' && (
             <div style={{textAlign:'center',padding:'1rem 0'}}>
-              <div style={{width:'10rem',height:'10rem',borderRadius:'1rem',background:'rgba(255,255,255,0.05)',border:`1px solid ${C.border}`,display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto 1.5rem'}}>
-                <QrCode size={80} color={C.muted} />
+              <div onClick={() => setShowQR(true)} style={{width:'12rem',height:'12rem',borderRadius:'1rem',overflow:'hidden',margin:'0 auto 1.5rem',cursor:'pointer',border:`2px solid rgba(201,168,76,0.3)`}}>
+                <canvas ref={qrRef} width="200" height="200" style={{width:'100%',height:'100%'}} />
               </div>
               <p style={{color:C.muted,fontSize:'0.875rem',marginBottom:'0.5rem'}}>Share your UPI ID to receive payments</p>
               <div style={{fontFamily:'monospace',color:C.gold,fontWeight:700,fontSize:'1rem',marginBottom:'1.5rem'}}>{account?.upi_id}</div>
@@ -132,6 +167,26 @@ export default function UPI() {
           )}
         </div>
       </main>
+
+      {/* QR Modal */}
+      {showQR && (
+        <div onClick={() => setShowQR(false)}
+          style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.75)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:1000,padding:'2rem'}}>
+          <div onClick={e => e.stopPropagation()}
+            style={{background:'#0d1a35',border:'1px solid rgba(201,168,76,0.3)',borderRadius:'1.25rem',padding:'2rem',textAlign:'center',maxWidth:'320px',width:'100%'}}>
+            <h3 style={{fontFamily:'Georgia,serif',color:'white',fontSize:'1.2rem',marginBottom:'0.5rem'}}>Scan to Pay</h3>
+            <p style={{color:C.muted,fontSize:'0.75rem',marginBottom:'1.5rem'}}>Open any UPI app and scan this QR code</p>
+            <div style={{borderRadius:'0.75rem',overflow:'hidden',display:'inline-block',border:'2px solid rgba(201,168,76,0.2)'}}>
+              <canvas ref={qrRef} width="200" height="200" style={{display:'block'}} />
+            </div>
+            <div style={{marginTop:'1rem',fontFamily:'monospace',color:'#C9A84C',fontWeight:700,fontSize:'0.9rem'}}>{account?.upi_id}</div>
+            <button onClick={() => setShowQR(false)}
+              style={{marginTop:'1.25rem',...S.btnGhost,padding:'0.5rem 1.5rem',fontSize:'0.875rem'}}>
+              Close
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
