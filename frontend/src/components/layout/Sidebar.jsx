@@ -1,6 +1,6 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import {
-  LayoutDashboard, ArrowLeftRight, CreditCard, PiggyBank,
+  LayoutDashboard, ArrowLeftRight, CreditCard, PiggyBank, PlusCircle,
   Smartphone, User, MessageCircle, LogOut, ChevronRight
 } from 'lucide-react'
 import { C } from '../../utils/styles'
@@ -12,6 +12,7 @@ const NAV = [
   { to:'/loans',      icon:PiggyBank,       label:'Loans' },
   { to:'/upi',        icon:Smartphone,      label:'UPI' },
   { to:'/cards',      icon:CreditCard,      label:'Cards' },
+  { to:'/add-money',  icon:PlusCircle,      label:'Add Money' },
   { to:'/profile',    icon:User,            label:'Profile' },
   { to:'/chat',       icon:MessageCircle,   label:'Chat Assistant' },
 ]

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { User, MapPin, Shield, CheckCircle, Eye, EyeOff } from 'lucide-react'
 import api from '../../services/api'
@@ -22,6 +22,7 @@ export default function Register() {
   const [error, setError] = useState('')
   const [showPw, setShowPw] = useState(false)
   const navigate = useNavigate()
+  const submitting = useRef(false)
 
   const [form, setForm] = useState({
     first_name:'', last_name:'', email:'', phone:'', date_of_birth:'',
@@ -59,7 +60,7 @@ export default function Register() {
     if (step === 1) {
       if (!/^[A-Z]{5}[0-9]{4}[A-Z]$/.test(form.pan_number.toUpperCase())) return 'Enter a valid PAN (e.g. ABCDE1234F)'
       if (!/^\d{12}$/.test(form.aadhar_number)) return 'Aadhar must be 12 digits'
-      if (!form.address) return 'Enter your address'
+      if (!form.address || form.address.trim().length < 10) return 'Address must be at least 10 characters'
     }
     if (step === 3) {
       if (form.password.length < 8) return 'Password must be at least 8 characters'
@@ -77,8 +78,10 @@ export default function Register() {
   }
 
   const handleSubmit = async () => {
+    if (submitting.current) return
     const err = validateStep()
     if (err) { setError(err); return }
+    submitting.current = true
     setError(''); setLoading(true)
     try {
       const res = await api.post('/api/auth/register/', {
@@ -96,7 +99,7 @@ export default function Register() {
       } else {
         setError('Registration failed. Please try again.')
       }
-    } finally { setLoading(false) }
+    } finally { setLoading(false); submitting.current = false }
   }
 
   const icons = [User, MapPin, Shield, CheckCircle]

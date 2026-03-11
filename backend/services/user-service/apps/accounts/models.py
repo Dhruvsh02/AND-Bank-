@@ -124,6 +124,8 @@ class UserProfile(models.Model):
     phone        = models.CharField(max_length=20)
     first_name   = models.CharField(max_length=100)
     last_name    = models.CharField(max_length=100)
+    mpin_hash    = models.CharField(max_length=256, blank=True)   # sha256 of 6-digit MPIN
+    mpin_set     = models.BooleanField(default=False)
     created_at   = models.DateTimeField(default=timezone.now)
     updated_at   = models.DateTimeField(auto_now=True)
 

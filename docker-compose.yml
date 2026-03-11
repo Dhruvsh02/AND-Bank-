@@ -119,8 +119,8 @@ services:
       - andbank-network
     command: python manage.py runserver 0.0.0.0:8003
     environment:
-      - RAZORPAY_KEY_ID=rzp_test_yourkey
-      - RAZORPAY_KEY_SECRET=your_secret
+      - RAZORPAY_KEY_ID=rzp_test_SPqNAstiFBq6OK
+      - RAZORPAY_KEY_SECRET=FdQdkUBs7TvAIW4RKXTl5fN3
       - RAZORPAY_WEBHOOK_SECRET=your_webhook_secret
 
   loan-service:

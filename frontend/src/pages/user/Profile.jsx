@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Camera, Save, Key, Shield, CheckCircle } from 'lucide-react'
+import { Camera, Save, Key, Shield, CheckCircle, Lock, Eye, EyeOff, AlertCircle } from 'lucide-react'
 import Sidebar from '../../components/layout/Sidebar'
 import api from '../../services/api'
 import { C, S } from '../../utils/styles'
@@ -11,6 +11,10 @@ export default function Profile() {
   const [saving,   setSaving]   = useState(false)
   const [pwData,   setPwData]   = useState({ current_password:'', new_password:'', confirm_password:'' })
   const [msg,      setMsg]      = useState({ type:'', text:'' })
+  const [mpinForm, setMpinForm] = useState({ mpin:'', current_mpin:'', confirm_mpin:'' })
+  const [mpinMsg,  setMpinMsg]  = useState({ type:'', text:'' })
+  const [mpinSet,  setMpinSet]  = useState(false)
+  const [showMpin, setShowMpin] = useState(false)
   const fileRef  = useRef()
   const navigate = useNavigate()
 
@@ -29,6 +33,21 @@ export default function Profile() {
       showMsg('success', 'Profile updated successfully!')
     } catch (e) { showMsg('error', e.response?.data?.detail || 'Update failed') }
     finally { setSaving(false) }
+  }
+
+  const saveMpin = async () => {
+    if (mpinForm.mpin.length !== 6 || !/^\d{6}$/.test(mpinForm.mpin))
+      { setMpinMsg({ type:'error', text:'MPIN must be exactly 6 digits' }); return }
+    if (mpinForm.mpin !== mpinForm.confirm_mpin)
+      { setMpinMsg({ type:'error', text:'MPINs do not match' }); return }
+    try {
+      const payload = { mpin: mpinForm.mpin }
+      if (mpinSet) payload.current_mpin = mpinForm.current_mpin
+      await api.post('/api/accounts/mpin/set/', payload)
+      setMpinMsg({ type:'success', text: mpinSet ? 'MPIN changed successfully!' : 'MPIN set successfully!' })
+      setMpinSet(true)
+      setMpinForm({ mpin:'', current_mpin:'', confirm_mpin:'' })
+    } catch(e) { setMpinMsg({ type:'error', text: e.response?.data?.detail || 'Failed to set MPIN' }) }
   }
 
   const goToChangePassword = () => {
@@ -53,7 +72,59 @@ export default function Profile() {
     <div style={S.page}><Sidebar />
       <div style={{flex:1,display:'flex',alignItems:'center',justifyContent:'center'}}>
         <div style={{width:'2rem',height:'2rem',border:`3px solid ${C.goldDim}`,borderTop:`3px solid ${C.gold}`,borderRadius:'50%',animation:'spin 0.8s linear infinite'}} />
-        <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+  
+        {/* MPIN Section */}
+        <div style={{...S.card, marginTop:'1.5rem'}}>
+          <h2 style={{fontFamily:'Georgia,serif', color:'white', fontSize:'1.1rem', display:'flex', alignItems:'center', gap:'0.5rem', marginBottom:'0.5rem'}}>
+            <Lock size={18} color={C.gold}/> Transaction MPIN
+          </h2>
+          <p style={{color:C.muted, fontSize:'0.875rem', marginBottom:'1.25rem'}}>
+            {mpinSet ? 'Your MPIN is set. Change it below.' : 'Set a 6-digit MPIN to authorise all transactions.'}
+          </p>
+
+          {mpinMsg.text && (
+            <div style={{marginBottom:'1rem', padding:'0.75rem', borderRadius:'0.75rem',
+              background: mpinMsg.type==='success' ? 'rgba(34,197,94,0.1)' : 'rgba(239,68,68,0.1)',
+              border:`1px solid ${mpinMsg.type==='success' ? 'rgba(34,197,94,0.3)' : 'rgba(239,68,68,0.3)'}`,
+              color: mpinMsg.type==='success' ? '#22c55e' : '#f87171', fontSize:'0.875rem', display:'flex', gap:'0.5rem'}}>
+              {mpinMsg.type==='success' ? <CheckCircle size={16}/> : <AlertCircle size={16}/>} {mpinMsg.text}
+            </div>
+          )}
+
+          <div style={{display:'flex', flexDirection:'column', gap:'1rem'}}>
+            {mpinSet && (
+              <div>
+                <label style={S.label}>Current MPIN</label>
+                <input type="password" inputMode="numeric" maxLength={6} value={mpinForm.current_mpin}
+                  onChange={e=>setMpinForm(p=>({...p,current_mpin:e.target.value.replace(/\D/g,'').slice(0,6)}))}
+                  placeholder="••••••" style={{...S.input, marginTop:'0.5rem', letterSpacing:'0.3em', fontWeight:700}}/>
+              </div>
+            )}
+            <div>
+              <label style={S.label}>{mpinSet ? 'New MPIN' : 'Set MPIN'}</label>
+              <input type="password" inputMode="numeric" maxLength={6} value={mpinForm.mpin}
+                onChange={e=>setMpinForm(p=>({...p,mpin:e.target.value.replace(/\D/g,'').slice(0,6)}))}
+                placeholder="••••••" style={{...S.input, marginTop:'0.5rem', letterSpacing:'0.3em', fontWeight:700}}/>
+            </div>
+            <div>
+              <label style={S.label}>Confirm MPIN</label>
+              <input type="password" inputMode="numeric" maxLength={6} value={mpinForm.confirm_mpin}
+                onChange={e=>setMpinForm(p=>({...p,confirm_mpin:e.target.value.replace(/\D/g,'').slice(0,6)}))}
+                placeholder="••••••" style={{...S.input, marginTop:'0.5rem', letterSpacing:'0.3em', fontWeight:700}}/>
+              <div style={{display:'flex', gap:'0.4rem', marginTop:'0.625rem'}}>
+                {[0,1,2,3,4,5].map(i=>(
+                  <div key={i} style={{width:'0.5rem',height:'0.5rem',borderRadius:'50%',background:i<mpinForm.mpin.length?'#C9A84C':'rgba(255,255,255,0.1)',transition:'background 0.15s'}}/>
+                ))}
+              </div>
+            </div>
+            <button onClick={saveMpin}
+              style={{...S.btn, display:'flex', alignItems:'center', gap:'0.5rem'}}>
+              <Lock size={16}/> {mpinSet ? 'Change MPIN' : 'Set MPIN'}
+            </button>
+          </div>
+        </div>
+
+      <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
       </div>
     </div>
   )
@@ -158,6 +229,58 @@ export default function Profile() {
           </button>
         </div>
       </main>
+
+        {/* MPIN Section */}
+        <div style={{...S.card, marginTop:'1.5rem'}}>
+          <h2 style={{fontFamily:'Georgia,serif', color:'white', fontSize:'1.1rem', display:'flex', alignItems:'center', gap:'0.5rem', marginBottom:'0.5rem'}}>
+            <Lock size={18} color={C.gold}/> Transaction MPIN
+          </h2>
+          <p style={{color:C.muted, fontSize:'0.875rem', marginBottom:'1.25rem'}}>
+            {mpinSet ? 'Your MPIN is set. Change it below.' : 'Set a 6-digit MPIN to authorise all transactions.'}
+          </p>
+
+          {mpinMsg.text && (
+            <div style={{marginBottom:'1rem', padding:'0.75rem', borderRadius:'0.75rem',
+              background: mpinMsg.type==='success' ? 'rgba(34,197,94,0.1)' : 'rgba(239,68,68,0.1)',
+              border:`1px solid ${mpinMsg.type==='success' ? 'rgba(34,197,94,0.3)' : 'rgba(239,68,68,0.3)'}`,
+              color: mpinMsg.type==='success' ? '#22c55e' : '#f87171', fontSize:'0.875rem', display:'flex', gap:'0.5rem'}}>
+              {mpinMsg.type==='success' ? <CheckCircle size={16}/> : <AlertCircle size={16}/>} {mpinMsg.text}
+            </div>
+          )}
+
+          <div style={{display:'flex', flexDirection:'column', gap:'1rem'}}>
+            {mpinSet && (
+              <div>
+                <label style={S.label}>Current MPIN</label>
+                <input type="password" inputMode="numeric" maxLength={6} value={mpinForm.current_mpin}
+                  onChange={e=>setMpinForm(p=>({...p,current_mpin:e.target.value.replace(/\D/g,'').slice(0,6)}))}
+                  placeholder="••••••" style={{...S.input, marginTop:'0.5rem', letterSpacing:'0.3em', fontWeight:700}}/>
+              </div>
+            )}
+            <div>
+              <label style={S.label}>{mpinSet ? 'New MPIN' : 'Set MPIN'}</label>
+              <input type="password" inputMode="numeric" maxLength={6} value={mpinForm.mpin}
+                onChange={e=>setMpinForm(p=>({...p,mpin:e.target.value.replace(/\D/g,'').slice(0,6)}))}
+                placeholder="••••••" style={{...S.input, marginTop:'0.5rem', letterSpacing:'0.3em', fontWeight:700}}/>
+            </div>
+            <div>
+              <label style={S.label}>Confirm MPIN</label>
+              <input type="password" inputMode="numeric" maxLength={6} value={mpinForm.confirm_mpin}
+                onChange={e=>setMpinForm(p=>({...p,confirm_mpin:e.target.value.replace(/\D/g,'').slice(0,6)}))}
+                placeholder="••••••" style={{...S.input, marginTop:'0.5rem', letterSpacing:'0.3em', fontWeight:700}}/>
+              <div style={{display:'flex', gap:'0.4rem', marginTop:'0.625rem'}}>
+                {[0,1,2,3,4,5].map(i=>(
+                  <div key={i} style={{width:'0.5rem',height:'0.5rem',borderRadius:'50%',background:i<mpinForm.mpin.length?'#C9A84C':'rgba(255,255,255,0.1)',transition:'background 0.15s'}}/>
+                ))}
+              </div>
+            </div>
+            <button onClick={saveMpin}
+              style={{...S.btn, display:'flex', alignItems:'center', gap:'0.5rem'}}>
+              <Lock size={16}/> {mpinSet ? 'Change MPIN' : 'Set MPIN'}
+            </button>
+          </div>
+        </div>
+
       <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
     </div>
   )

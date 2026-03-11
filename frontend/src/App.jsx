@@ -16,6 +16,7 @@ import Profile        from './pages/user/Profile'
 import ChangePassword from './pages/user/ChangePassword'
 import Chat      from './pages/user/Chat'
 import Cards     from './pages/user/Cards'
+import AddMoney  from './pages/user/AddMoney'
 
 // Admin pages
 import AdminDashboard    from './pages/admin/AdminDashboard'
@@ -48,6 +49,7 @@ export default function App() {
       <Route path="/transfer"  element={<Private><Transfer /></Private>} />
       <Route path="/upi"       element={<Private><UPI /></Private>} />
       <Route path="/cards"     element={<Private><Cards /></Private>} />
+      <Route path="/add-money"  element={<Private><AddMoney /></Private>} />
       <Route path="/loans"     element={<Private><Loans /></Private>} />
       <Route path="/profile"          element={<Private><Profile /></Private>} />
       <Route path="/change-password" element={<Private><ChangePassword /></Private>} />

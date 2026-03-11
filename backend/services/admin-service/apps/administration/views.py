@@ -116,7 +116,7 @@ class AdminCardListView(APIView):
     permission_classes = [AllowAny]
 
     def get(self, request):
-        data, code = proxy('get', f'{CARD}/api/cards/admin/all/')
+        data, code = proxy('get', f'{CARD}/api/cards/admin/all/', params=request.query_params)
         return Response(data, status=code)
 
 
@@ -124,7 +124,11 @@ class AdminCardApproveView(APIView):
     permission_classes = [AllowAny]
 
     def post(self, request, card_id):
-        data, code = proxy('post', f'{CARD}/api/cards/admin/{card_id}/approve/', json={})
+        # Support both approve action and legacy approve endpoint
+        payload = request.data if request.data else {'action': 'approve', 'credit_limit': 50000}
+        if 'action' not in payload:
+            payload = {'action': 'approve', 'credit_limit': payload.get('credit_limit', 50000)}
+        data, code = proxy('post', f'{CARD}/api/cards/admin/{card_id}/action/', json=payload)
         if code < 300:
             log_action(get_admin_id(request), 'approve_card',
                        detail={'card_id': str(card_id)}, ip=request.META.get('REMOTE_ADDR'))

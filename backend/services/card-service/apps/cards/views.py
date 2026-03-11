@@ -210,7 +210,8 @@ class AdminCardActionView(APIView):
         except Card.DoesNotExist:
             return Response({'detail': 'Card not found'}, status=404)
 
-        action       = request.data.get('action')           # 'approve' | 'reject'
+        # Support legacy /approve/ endpoint (no body needed — defaults to approve)
+        action       = request.data.get('action', 'approve')
         credit_limit = request.data.get('credit_limit', 50000)
         admin_note   = request.data.get('admin_note', '')
 
@@ -220,7 +221,7 @@ class AdminCardActionView(APIView):
             card.credit_limit = credit_limit
             card.admin_note   = admin_note
             card.save()
-            return Response({'detail': f'Credit card approved with limit ₹{credit_limit}', 'card': serialize(card)})
+            return Response({'detail': f'Credit card approved with limit {credit_limit}', 'card': serialize(card)})
 
         elif action == 'reject':
             card.status     = 'rejected'

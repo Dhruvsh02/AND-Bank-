@@ -40,7 +40,7 @@ class CreateOrderView(APIView):
         order = get_client().order.create({
             'amount':   amount,
             'currency': 'INR',
-            'receipt':  f'deposit_{user_id}_{uuid.uuid4().hex[:8]}',
+            'receipt':  f'dep_{str(user_id).replace("-","")[:8]}_{uuid.uuid4().hex[:8]}',
             'notes': {
                 'user_id': str(user_id),
                 'purpose': 'account_deposit',
