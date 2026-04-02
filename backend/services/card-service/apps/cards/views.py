@@ -7,6 +7,28 @@ from .models import Card, generate_card_number, generate_cvv
 
 logger  = logging.getLogger(__name__)
 INTERNAL = 'internal-service-secret'
+_NOTIF   = 'http://notification-service:8006'
+_USER    = 'http://user-service:8002'
+_THEADERS = {'X-Service-Token': INTERNAL}
+
+def _get_profile(user_id=None, auth_hdr=None):
+    try:
+        headers = {**_THEADERS}
+        if user_id:   headers['X-User-Id'] = str(user_id)
+        if auth_hdr:  headers['Authorization'] = auth_hdr
+        import requests as _req
+        r = _req.get(f'{_USER}/api/users/profile/', headers=headers, timeout=3)
+        return r.json() if r.status_code == 200 else {}
+    except Exception as e:
+        logger.warning(f'Profile fetch failed: {e}')
+        return ()
+    
+def _notify(path,data):
+    try:
+        import requests as _req 
+        _req.post(f'{_NOTIF}/api/notifications/{path}', json=data, headers=_THEADERS, timeout=4)
+    except Exception as e:
+        logger.warning(f'Notification skipped ({path}): {e}')
 
 def get_uid(request):
     return getattr(request, 'user_id', None)
@@ -95,6 +117,15 @@ class CardListView(APIView):
             purpose         = purpose,
             credit_limit    = 0,  # set by admin on approval
         )
+        profile = _get_profile(auth_hdr=request.headers.get('Authorization', ''))
+        applicant_name = f"{profile.get('first_name', '')} {profile.get('last_name', '')}".strip() or 'Applicant'
+        _notify('card/apply/', {
+            'applicant_name': applicant_name,
+            'annual_income': str(annual_income),
+            'employment_type': employment_type,
+            'purpose': purpose,
+            'card_id': str(card.id),
+        })
         return Response({'detail': 'Credit card application submitted', 'card': serialize(card)}, status=201)
 
 
@@ -221,12 +252,31 @@ class AdminCardActionView(APIView):
             card.credit_limit = credit_limit
             card.admin_note   = admin_note
             card.save()
+            profile = _get_profile(user_id=card.user_id)
+            _notify('card/decision/', {
+                'user_id': str(card.user_id),
+                'email': profile.get('email', ''),
+                'name': f"{profile.get('first_name', '')} {profile.get('last_name', '')}".strip() ,
+                'action': 'approved',
+                'credit_limit': str(credit_limit),
+                'admin_note': admin_note,
+                'network': card.network,
+            })
             return Response({'detail': f'Credit card approved with limit {credit_limit}', 'card': serialize(card)})
 
         elif action == 'reject':
             card.status     = 'rejected'
             card.admin_note = admin_note
             card.save()
+            profile = _get_profile(user_id=card.user_id)
+            _notify('card/decision/', {
+                'user_id': str(card.user_id),
+                'email': profile.get('email', ''),
+                'name': f"{profile.get('first_name', '')} {profile.get('last_name', '')}".strip() ,
+                'action': 'rejected',
+                'admin_note': admin_note,
+                'network': card.network,
+            })
             return Response({'detail': 'Credit card application rejected', 'card': serialize(card)})
 
         return Response({'detail': 'Invalid action'}, status=400)

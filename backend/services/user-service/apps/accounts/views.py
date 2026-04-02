@@ -1,4 +1,5 @@
 import decimal, logging, hashlib
+from django.db import transaction
 from django.utils import timezone
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -161,18 +162,20 @@ class BalanceUpdateView(APIView):
         txn_type = request.data.get('txn_type', 'debit')
 
         try:
-            acct = BankAccount.objects.select_for_update().get(user_id=user_id, status='active')
+            with transaction.atomic():
+                acct = BankAccount.objects.select_for_update().get(user_id=user_id, status='active')
+
+                if txn_type == 'debit':
+                    if acct.balance < amount:
+                        return Response({'detail': 'Insufficient balance'}, status=400)
+                    acct.balance -= amount
+                else:
+                    acct.balance += amount
+
+                acct.save(update_fields=['balance'])
         except BankAccount.DoesNotExist:
             return Response({'detail': 'Account not found'}, status=404)
 
-        if txn_type == 'debit':
-            if acct.balance < amount:
-                return Response({'detail': 'Insufficient balance'}, status=400)
-            acct.balance -= amount
-        else:
-            acct.balance += amount
-
-        acct.save(update_fields=['balance'])
         return Response({'balance': str(acct.balance), 'account_number': acct.account_number})
 
 
@@ -234,7 +237,7 @@ class ProfileView(APIView):
     permission_classes = [AllowAny]
 
     def get(self, request):
-        user_id = get_user_id(request)
+        user_id = get_user_id(request) or request.headers.get('X-User-Id')
         if not user_id:
             return Response({'detail': 'Unauthorized'}, status=401)
         profile, _ = UserProfile.objects.get_or_create(
@@ -253,7 +256,7 @@ class ProfileView(APIView):
         })
 
     def patch(self, request):
-        user_id = get_user_id(request)
+        user_id = get_user_id(request) or request.headers.get('X-User-Id')
         if not user_id:
             return Response({'detail': 'Unauthorized'}, status=401)
         profile, _ = UserProfile.objects.get_or_create(user_id=user_id, defaults={'email':'','phone':''})

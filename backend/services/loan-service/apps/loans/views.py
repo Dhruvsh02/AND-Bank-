@@ -3,7 +3,31 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework import status
 from decimal import Decimal
+import logging, requests as _req
 from .models import LoanApplication
+
+logger   = logging.getLogger(__name__)
+_NOTIF   = 'http://notification-service:8006'
+_USER    = 'http://user-service:8002'
+_HEADERS = {'X-Service-Token': 'internal-service-secret'}
+
+def _get_profile(user_id=None, auth_hdr=None):
+    """Fetch user profile — by user_id (internal) or by JWT (user request)."""
+    try:
+        headers = {**_HEADERS}
+        if user_id:   headers['X-User-Id'] = str(user_id)
+        if auth_hdr:  headers['Authorization'] = auth_hdr
+        r = _req.get(f'{_USER}/api/users/profile/', headers=headers, timeout=3)
+        return r.json() if r.status_code == 200 else {}
+    except Exception as e:
+        logger.warning(f'Profile fetch failed: {e}')
+        return {}
+
+def _notify(path, data):
+    try:
+        _req.post(f'{_NOTIF}/api/notifications/{path}', json=data, headers=_HEADERS, timeout=4)
+    except Exception as e:
+        logger.warning(f'Notification skipped ({path}): {e}')
 
 RATES = {'personal':10.5,'home':8.5,'car':9.0,'education':7.5}
 
@@ -54,15 +78,32 @@ class LoanApplyView(APIView):
             interest_rate = rate,
             emi_amount    = round(emi, 2),
         )
+        profile = _get_profile(auth_hdr=request.headers.get('Authorization', ''))
+        applicant_name = f"{profile.get('first_name', '')} {profile.get('last_name', '')}".strip() or 'Applicant'
+        _notify('loan/apply/',{
+            'applicant_name': applicant_name,
+            'loan_type': loan.loan_type,
+            'amount': str(loan.amount),
+            'tenure_months': loan.tenure_months,
+            'loan_id': str(loan.id),
+        })
+        _notify('loan/decision/', {
+            'user_id': str(request.user_id),
+            'email': profile.get('email', ''),
+            'name': applicant_name,
+            'loan_type': loan.loan_type,
+            'amount': str(loan.amount),
+            'action': 'received',
+        })
         return Response({
-            'id':           str(loan.id),
-            'loan_type':    loan.loan_type,
-            'amount':       str(loan.amount),
-            'tenure_months':loan.tenure_months,
-            'emi_amount':   str(loan.emi_amount),
-            'status':       loan.status,
-            'created_at':   loan.created_at.isoformat(),
-        }, status=201)
+            'id': str(loan.id),
+            'loan_type': loan.loan_type,
+            'amount': str(loan.amount),
+            'tenure_months': loan.tenure_months,
+            'status': loan.status,
+            'emi_amount': str(loan.emi_amount or 0),
+            'created_at': loan.created_at.isoformat(),
+        }, status=201)  
 
 
 class AdminLoanListView(APIView):
@@ -103,6 +144,18 @@ class AdminLoanActionView(APIView):
             else:
                 return Response({'detail': 'Invalid action'}, status=400)
             loan.save()
+            profile = _get_profile(user_id=loan.user_id)
+            _notify('loan/decision/', {
+                'user_id': str(loan.user_id),
+                'email': profile.get('email', ''),
+                'name': f"{profile.get('first_name', '')} {profile.get('last_name', '')}".strip() or 'Customer',
+                'loan_type': loan.loan_type,
+                'amount': str(loan.amount),
+                'action': 'approved' if action == 'approve' else 'rejected',
+                'admin_note': request.data.get('reason', '') if action=='reject' else '',
+                'emi_amount': str(loan.emi_amount or 0) if action=='approve' else '',
+                'interest_rate': str(loan.interest_rate) if action=='approve' else '',
+            })
             return Response({'detail': f'Loan {action}d', 'status': loan.status})
         except LoanApplication.DoesNotExist:
             return Response({'detail': 'Not found'}, status=404)

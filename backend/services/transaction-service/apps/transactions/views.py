@@ -10,6 +10,24 @@ import requests as req
 logger   = logging.getLogger(__name__)
 USER_SVC = 'http://user-service:8002'
 INTERNAL = {'X-Service-Token': 'internal-service-secret'}
+NOTIF = 'http://notification-service:8006'
+
+def _get_profile(auth_hdr=None,user_id=None):
+    """Fetch user profile — by user_id (internal) or by JWT (user request)."""
+    try:
+        headers = {**INTERNAL}
+        if user_id:   headers['X-User-Id'] = str(user_id)
+        if auth_hdr:  headers['Authorization'] = auth_hdr
+        r = req.get(f'{USER_SVC}/api/users/profile/', headers=headers, timeout=3)
+        return r.json() if r.status_code == 200 else {}
+    except Exception as e:
+        logger.warning(f'Profile fetch failed: {e}')
+        return {}
+def _notify(path, data):
+    try:
+        req.post(f'{NOTIF}/api/notifications/{path}', json=data, headers=INTERNAL, timeout=4)
+    except Exception as e:
+        logger.warning(f'Notification skipped ({path}): {e}')
 
 
 def get_uid(request):
@@ -29,8 +47,12 @@ class TransactionListView(APIView):
         from_dt  = request.query_params.get('from_date')
         to_dt    = request.query_params.get('to_date')
 
-        qs = (Transaction.objects.filter(from_user_id=user_id) |
-              Transaction.objects.filter(to_user_id=user_id)).order_by('-initiated_at')
+        # Show each transfer once from the correct perspective:
+        # - sender sees the debit record  (from_user_id=me, txn_type='debit')
+        # - receiver sees the credit record (to_user_id=me, txn_type='credit')
+        # This prevents both participants from seeing duplicate entries.
+        qs = (Transaction.objects.filter(from_user_id=user_id, txn_type='debit') |
+              Transaction.objects.filter(to_user_id=user_id, txn_type='credit')).distinct().order_by('-initiated_at')
         if mode     and mode != 'all':     qs = qs.filter(mode=mode)
         if txn_type and txn_type != 'all': qs = qs.filter(txn_type=txn_type)
         if from_dt: qs = qs.filter(initiated_at__date__gte=from_dt)
@@ -119,7 +141,11 @@ class TransferView(APIView):
                       json={'user_id': str(user_id), 'amount': str(total_debit), 'txn_type': 'debit'},
                       headers=INTERNAL, timeout=5)
         if dr.status_code != 200:
-            return Response({'detail': dr.json().get('detail', 'Debit failed')}, status=400)
+            try:
+                detail = dr.json().get('detail', 'Debit failed')
+            except Exception:
+                detail = 'Debit failed'
+            return Response({'detail': detail}, status=400)
 
         new_sender_bal = Decimal(str(dr.json()['balance']))
 
@@ -148,6 +174,32 @@ class TransferView(APIView):
         )
 
         logger.info(f'Transfer {txn_id}: {user_id} → {to_user_id} ₹{amount}')
+        profile = _get_profile(auth_hdr=auth_hdr)
+        _notify('transaction/', {
+            'user_id': str(user_id),
+            'email': profile.get('email', ''),
+            'name': f"{profile.get('first_name', '')} {profile.get('last_name', '')}".strip(),
+            "amount": str(amount),
+            'txn_type': 'debit',
+            'txn_in': txn_id,
+            'mode': mode.upper(),
+            'to_from': f'{to_name} ({to_account})',
+            'balance_after': str(new_sender_bal),
+            'remark': remark,
+        })
+        recv_profile = _get_profile(user_id=to_user_id)
+        _notify('transaction/', {
+            'user_id': str(to_user_id),
+            'email': recv_profile.get('email', ''),
+            'name': f"{recv_profile.get('first_name', '')} {recv_profile.get('last_name', '')}".strip(),
+            "amount": str(amount),
+            'txn_type': 'credit',
+            'txn_in': txn_id + '-CR',
+            'mode': mode.upper(),
+            'to_from': f'{profile.get("first_name", "")} {profile.get("last_name", "")}'.strip(),
+            'balance_after': str(recv_profile.get('balance', 0)),
+            'remark': remark,
+        })
         return Response({
             'txn_id':    txn_id,
             'amount':    str(amount),
@@ -253,6 +305,17 @@ class RazorpayVerifyView(APIView):
         )
 
         logger.info(f'Add money {txn_id}: ₹{amount} credited to {user_id}')
+        auth_hdr = request.headers.get('Authorization', '')
+        profile = _get_profile(auth_hdr=auth_hdr)
+        _notify('add-money/', {
+            'user_id': str(user_id),
+            'email': profile.get('email', ''),
+            'name': f"{profile.get('first_name', '')} {profile.get('last_name', '')}".strip(),
+            'amount': str(amount),
+            'txn_id': txn_id,
+            'balance_after': str(new_balance),
+            'payment_id': payment_id,
+        })
         return Response({'txn_id': txn_id, 'amount': str(amount), 'status': 'completed', 'balance': str(new_balance)})
 
 
@@ -335,6 +398,15 @@ class AdminFlagTransactionView(APIView):
             return Response({'detail': 'Not found'}, status=404)
 
 
+def _fmt_dt(dt):
+    """Always return an ISO-8601 string with explicit UTC offset so JS parses correctly."""
+    if dt is None:
+        return None
+    if dt.tzinfo is not None:
+        return dt.isoformat()          # already aware (e.g. +00:00)
+    return dt.strftime('%Y-%m-%dT%H:%M:%S') + '+00:00'  # naive → mark as UTC
+
+
 def _serialize(t, viewer_uid=None):
     return {
         'id':           str(t.id),
@@ -351,6 +423,6 @@ def _serialize(t, viewer_uid=None):
         'from_user_id': str(t.from_user_id),
         'to_user_id':   str(t.to_user_id) if t.to_user_id else None,
         'balance_after':str(t.balance_after or 0),
-        'initiated_at': t.initiated_at.isoformat(),
-        'completed_at': t.completed_at.isoformat() if t.completed_at else None,
+        'initiated_at': _fmt_dt(t.initiated_at),
+        'completed_at': _fmt_dt(t.completed_at),
     }

@@ -155,23 +155,24 @@ class OTPVerifyView(APIView):
             user.status      = 'active'
             user.save(update_fields=['is_verified', 'status'])
 
-            # Safety net: ensure bank account exists (in case register-time creation failed)
-            try:
-                import requests as _r
-                _resp = _r.get(
-                    f"{settings.USER_SERVICE_URL}/api/accounts/balance/",
-                    headers={'X-User-Id': str(user.id), 'X-Service-Token': 'internal-service-secret'},
-                    timeout=3,
+        # Safety net: always ensure bank account exists (covers both registration
+        # failures and login of users whose account was never created)
+        try:
+            import requests as _r
+            _resp = _r.get(
+                f"{settings.USER_SERVICE_URL}/api/accounts/balance/",
+                headers={'X-User-Id': str(user.id), 'X-Service-Token': 'internal-service-secret'},
+                timeout=3,
+            )
+            if _resp.status_code == 404:
+                # Account missing — create it now
+                AccountService._create_sync(
+                    str(user.id), 'savings', {},
+                    user.first_name, user.last_name, user.email, user.phone,
                 )
-                if _resp.status_code == 404:
-                    # Account missing — create it now
-                    AccountService._create_sync(
-                        str(user.id), 'savings', {},
-                        user.first_name, user.last_name, user.email, user.phone,
-                    )
-                    logger.info(f'Account created at OTP verify (safety net) for {user.email}')
-            except Exception as _e:
-                logger.warning(f'Account safety-net check failed: {_e}')
+                logger.info(f'Account created at OTP verify (safety net) for {user.email}')
+        except Exception as _e:
+            logger.warning(f'Account safety-net check failed: {_e}')
 
         user.last_login_ip = client_ip(request)
         user.save(update_fields=['last_login_ip'])

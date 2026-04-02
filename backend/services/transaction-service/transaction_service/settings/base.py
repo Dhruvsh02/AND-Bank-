@@ -58,6 +58,9 @@ SIMPLE_JWT = {'AUTH_HEADER_TYPES': ('Bearer',),
 STATIC_URL = '/static/'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
+USE_TZ    = True
+TIME_ZONE = 'UTC'
+
 # Razorpay
 RAZORPAY_KEY_ID      = config('RAZORPAY_KEY_ID',      default='rzp_test_placeholder')
 RAZORPAY_KEY_SECRET  = config('RAZORPAY_KEY_SECRET',  default='placeholder_secret')

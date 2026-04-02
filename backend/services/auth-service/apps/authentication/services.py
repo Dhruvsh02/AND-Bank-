@@ -86,18 +86,32 @@ class OTPService:
         return not cache.get(f'{self.CACHE_PREFIX}{self.user.id}')
 
     def _send_email(self, otp, purpose):
-        labels  = {'login': 'Login', 'register': 'Registration', 'password_reset': 'Password Reset'}
-        subject = f'AND Bank — Your {labels.get(purpose, "OTP")} Code: {otp}'
-        message = (
-            f'Dear {self.user.first_name},\n\n'
-            f'Your AND Bank OTP is: {otp}\n\n'
-            f'Valid for {settings.OTP_EXPIRE_MINUTES} minutes.\n'
-            f'Never share this with anyone.\n\n— AND Bank'
-        )
+        """Fire OTP via notification-service (HTML email) + fallback direct SMTP."""
+        import requests as _req
         try:
-            send_mail(subject, message, settings.DEFAULT_FROM_EMAIL, [self.user.email], fail_silently=False)
+            _req.post(
+                'http://notification-service:8006/api/notifications/otp/',
+                json={
+                    'user_id': str(self.user.id),
+                    'email':   self.user.email,
+                    'name':    self.user.first_name or 'Customer',
+                    'otp':     otp,
+                    'purpose': purpose,
+                    'expires_minutes': settings.OTP_EXPIRE_MINUTES,
+                },
+                headers={'X-Service-Token': 'internal-service-secret'},
+                timeout=4,
+            )
         except Exception as e:
-            logger.warning(f'Email send failed (OTP still printed above): {e}')
+            logger.warning(f'Notification-service OTP failed, using direct SMTP: {e}')
+            # Fallback — send plain email directly
+            labels  = {'login':'Login','register':'Registration','password_reset':'Password Reset'}
+            subject = f'AND Bank — Your {labels.get(purpose,"OTP")} Code: {otp}'
+            message = f'Your AND Bank OTP is: {otp}\nValid for {settings.OTP_EXPIRE_MINUTES} minutes.\nNever share this with anyone.'
+            try:
+                from django.core.mail import send_mail
+                send_mail(subject, message, settings.DEFAULT_FROM_EMAIL, [self.user.email], fail_silently=True)
+            except: pass
 
     def _send_sms(self, otp):
         try:
@@ -134,6 +148,20 @@ class AccountService:
                 logger.error(f'Account creation failed: {resp.status_code} {resp.text}')
             else:
                 logger.info(f'Account created successfully for user {user_id}')
+                try:
+                    resp_data = resp.json()
+                    http_requests.post(
+                        f"{settings.NOTIFICATION_SERVICE_URL}/api/notifications/welcome/",
+                        json= {
+                            'user_id': str(user_id), 'email': email, 'name': first_name,
+                            'account_number': resp_data.get('account_number', ''),
+                            'upi_id': resp_data.get('upi_id', ''),
+                        },
+                        headers={'X-Service-Token': 'internal-service-secret'},
+                        timeout=3,
+                    )
+                except Exception as e:
+                    logger.warning(f'Welcome notification skipped: {e}')
         except Exception as e:
             logger.error(f'Sync account creation failed: {e}')
 
