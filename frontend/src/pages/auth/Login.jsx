@@ -47,6 +47,7 @@ export default function Login() {
             ))}
           </div>
         </div>
+        
       </div>
 
       {/* Right form */}
@@ -110,6 +111,20 @@ export default function Login() {
           New to AND Bank?{' '}
           <Link to="/register" style={{color:'#C9A84C',textDecoration:'none',fontWeight:500}}>Open an account</Link>
         </p>
+                {/* Disclaimer */}
+<p style={{
+  textAlign: 'center',
+  color: 'rgba(255,255,255,0.25)',
+  fontSize: '0.82rem',
+  marginTop: '2.5rem',
+  lineHeight: '1.6',
+  padding: '0 1rem',
+  
+}}>
+  ⚠️ This is a student project for demonstration purposes only.
+  AND Bank is not a real bank. No real money is involved.
+  All transactions are simulated.
+</p>
       </div>
 
       <style>{`

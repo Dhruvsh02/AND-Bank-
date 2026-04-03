@@ -5,6 +5,14 @@ import Sidebar from '../../components/layout/Sidebar'
 import api from '../../services/api'
 import { C, S, fmt } from '../../utils/styles'
 
+const loadJsPDF = () => new Promise((resolve) => {
+  if (window.jspdf) { resolve(window.jspdf.jsPDF); return}
+  const s = document.createElement('script')
+  s.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js'
+  s.onload = () => resolve(window.jspdf.jsPDF)
+  document.head.appendChild(s)
+})
+
 const MODES   = ['all','neft','rtgs','imps','upi','atm','pos']
 const TYPES   = ['all','credit','debit']
 
@@ -47,6 +55,128 @@ export default function Statement() {
   const totalIn  = filtered.filter(t=>t.txn_type==='credit').reduce((a,t)=>a+parseFloat(t.amount||0),0)
   const totalOut = filtered.filter(t=>t.txn_type==='debit').reduce((a,t)=>a+parseFloat(t.amount||0),0)
 
+  const downloadPDF = async () => {
+    const jsPDF  = await loadJsPDF()
+    const doc    = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
+    const user   = JSON.parse(sessionStorage.getItem('user') || '{}')
+    const name   = `${user.first_name || ''} ${user.last_name || ''}`.trim() || 'Account Holder'
+    const today  = new Date().toLocaleDateString('en-IN', { day:'2-digit', month:'long', year:'numeric' })
+    const W      = 210  // A4 width mm
+
+    // ── Header bar ────────────────────────────────────────────────
+    doc.setFillColor(26, 26, 26)
+    doc.rect(0, 0, W, 40, 'F')
+    doc.setTextColor(201, 168, 76)
+    doc.setFontSize(20)
+    doc.setFont('helvetica', 'bold')
+    doc.text('AND Bank', 14, 16)
+    doc.setFontSize(9)
+    doc.setTextColor(150, 150, 150)
+    doc.text('PRIVATE BANKING', 14, 22)
+    doc.setFontSize(11)
+    doc.setTextColor(255, 255, 255)
+    doc.text('Account Statement', 14, 32)
+    doc.setFontSize(9)
+    doc.setTextColor(150, 150, 150)
+    doc.text(`Generated: ${today}`, W - 14, 32, { align: 'right' })
+
+    // ── Account info ──────────────────────────────────────────────
+    doc.setFillColor(35, 35, 35)
+    doc.rect(0, 40, W, 22, 'F')
+    doc.setFontSize(9)
+    doc.setTextColor(150, 150, 150)
+    doc.text('Account Holder', 14, 49)
+    doc.setTextColor(255, 255, 255)
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(10)
+    doc.text(name, 14, 56)
+
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(9)
+    doc.setTextColor(150, 150, 150)
+    doc.text(`Total Credited`, W/2, 49, { align: 'center' })
+    doc.setTextColor(34, 197, 94)
+    doc.setFont('helvetica', 'bold')
+    doc.text(`+ ${fmt.currency(totalIn)}`, W/2, 56, { align: 'center' })
+
+    doc.setFont('helvetica', 'normal')
+    doc.setTextColor(150, 150, 150)
+    doc.text(`Total Debited`, W - 14, 49, { align: 'right' })
+    doc.setTextColor(239, 68, 68)
+    doc.setFont('helvetica', 'bold')
+    doc.text(`- ${fmt.currency(totalOut)}`, W - 14, 56, { align: 'right' })
+
+    // ── Table header ──────────────────────────────────────────────
+    let y = 70
+    doc.setFillColor(201, 168, 76)
+    doc.rect(0, y, W, 8, 'F')
+    doc.setTextColor(26, 26, 26)
+    doc.setFontSize(7.5)
+    doc.setFont('helvetica', 'bold')
+    const cols = [14, 40, 90, 130, 158, 185]
+    const heads = ['DATE', 'TXN ID', 'DETAILS', 'MODE', 'AMOUNT', 'STATUS']
+    heads.forEach((h, i) => doc.text(h, cols[i], y + 5.5))
+
+    // ── Rows ──────────────────────────────────────────────────────
+    y += 8
+    doc.setFont('helvetica', 'normal')
+    filtered.forEach((t, i) => {
+      if (y > 270) {
+        doc.addPage()
+        y = 20
+        // repeat header on new page
+        doc.setFillColor(201, 168, 76)
+        doc.rect(0, y - 8, W, 8, 'F')
+        doc.setTextColor(26, 26, 26)
+        doc.setFont('helvetica', 'bold')
+        heads.forEach((h, i) => doc.text(h, cols[i], y - 2.5))
+        doc.setFont('helvetica', 'normal')
+      }
+      const isCredit = t.txn_type === 'credit'
+      // row bg
+      doc.setFillColor(i % 2 === 0 ? 30 : 26, i % 2 === 0 ? 30 : 26, i % 2 === 0 ? 30 : 26)
+      doc.rect(0, y, W, 9, 'F')
+
+      doc.setFontSize(7.5)
+      doc.setTextColor(180, 180, 180)
+      doc.text(fmt.date(t.initiated_at), cols[0], y + 6)
+
+      doc.setTextColor(150, 150, 150)
+      const txnId = (t.txn_id || '—').substring(0, 18)
+      doc.text(txnId, cols[1], y + 6)
+
+      doc.setTextColor(220, 220, 220)
+      const detail = (t.remark || 'Transaction').substring(0, 22)
+      doc.text(detail, cols[2], y + 6)
+
+      doc.setTextColor(150, 150, 150)
+      doc.text((t.mode || '').toUpperCase(), cols[3], y + 6)
+
+      doc.setTextColor(isCredit ? 34 : 239, isCredit ? 197 : 68, isCredit ? 94 : 68)
+      doc.setFont('helvetica', 'bold')
+      doc.text(`${isCredit ? '+' : '-'} ${fmt.currency(t.amount)}`, cols[4], y + 6)
+
+      doc.setFont('helvetica', 'normal')
+      doc.setTextColor(t.status === 'completed' ? 34 : 239, t.status === 'completed' ? 197 : 68, t.status === 'completed' ? 94 : 68)
+      doc.text(t.status || '—', cols[5], y + 6)
+
+      y += 9
+    })
+
+    // ── Footer ────────────────────────────────────────────────────
+    const pages = doc.getNumberOfPages()
+    for (let p = 1; p <= pages; p++) {
+      doc.setPage(p)
+      doc.setFillColor(26, 26, 26)
+      doc.rect(0, 285, W, 12, 'F')
+      doc.setFontSize(7)
+      doc.setTextColor(100, 100, 100)
+      doc.text('AND Bank · Private Banking · This is a simulated statement for project demonstration only', W/2, 292, { align: 'center' })
+      doc.text(`Page ${p} of ${pages}`, W - 14, 292, { align: 'right' })
+    }
+
+    doc.save(`AND-Bank-Statement-${new Date().toISOString().slice(0,10)}.pdf`)
+  }
   const pill = (val, cur, set, label) => (
     <button key={val} onClick={() => set(val)}
       style={{padding:'0.375rem 0.875rem', borderRadius:'999px', fontSize:'0.75rem', fontWeight:600, border:'none', cursor:'pointer',
@@ -65,7 +195,7 @@ export default function Statement() {
             <h1 style={{fontFamily:'Georgia,serif', fontSize:'1.75rem', color:'white'}}>Account Statement</h1>
             <p style={{color:C.muted, fontSize:'0.875rem'}}>Your full transaction history</p>
           </div>
-          <button style={{...S.btn, display:'flex', alignItems:'center', gap:'0.5rem'}}>
+          <button onClick={downloadPDF} style={{...S.btn, display:'flex', alignItems:'center', gap:'0.5rem'}}>
             <Download size={16} /> Download PDF
           </button>
         </div>

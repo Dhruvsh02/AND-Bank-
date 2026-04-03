@@ -144,6 +144,7 @@ class AccountCreateView(APIView):
             )
         except Exception as _e:
             logger.warning(f'Debit card auto-create failed: {_e}')
+            print(f'DEBIT CARD ERROR: {_e}', flush=True)
 
         logger.info(f'Account created: {acct.account_number} for user {user_id}')
         return Response({'account_number': acct.account_number, 'upi_id': acct.upi_id, 'account_type': acct.account_type}, status=201)
